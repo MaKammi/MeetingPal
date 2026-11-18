@@ -672,16 +672,14 @@ function ModelPicker({
   const [models, setModels] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const providers: Provider[] =
-    task === "transcription"
-      ? ["local", "openai"]
-      : ["local", "openai", "anthropic", "gemini"];
-  const local =
-    task === "transcription"
-      ? ["whisper-small", "whisper-turbo"]
-      : task === "vision"
-        ? ["qwen-vision"]
-        : ["qwen-text", "qwen-vision"];
+  const providers: Provider[] = task.endsWith("transcription")
+    ? ["local", "openai"]
+    : ["local", "openai", "anthropic", "gemini"];
+  const local = task.endsWith("transcription")
+    ? ["whisper-small", "whisper-turbo"]
+    : task === "vision"
+      ? ["qwen-vision"]
+      : ["qwen-text", "qwen-vision"];
   return (
     <div className="model-picker">
       <label>{label}</label>
@@ -740,7 +738,7 @@ function ModelPicker({
                     provider: value.provider,
                   });
                   setModels(
-                    task === "transcription"
+                    task.endsWith("transcription")
                       ? list.filter((s) => /transcribe|whisper/.test(s))
                       : list,
                   );
@@ -819,6 +817,7 @@ function Setup({
   const transmissions = disclosure(c);
   const missing = [
     c.transcription,
+    ...(c.finalTranscription ? [c.finalTranscription] : []),
     c.analysis,
     ...(c.videoAnalysis !== "none" ? [c.vision] : []),
   ].filter(
@@ -1134,6 +1133,7 @@ function Setup({
                     ...(offline
                       ? {
                           transcription: defaultConfig().transcription,
+                          finalTranscription: null,
                           analysis: defaultConfig().analysis,
                           vision: defaultConfig().vision,
                           videoAnalysis:
@@ -1155,6 +1155,38 @@ function Setup({
               t={t}
               onChange={(transcription) => patch({ transcription })}
             />
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={!!c.finalTranscription}
+                onChange={(e) =>
+                  patch({
+                    finalTranscription: e.target.checked
+                      ? { provider: "local", model: "whisper-turbo" }
+                      : null,
+                  })
+                }
+              />
+              {t(
+                "Anderes Modell für das endgültige Transkript",
+                "Use a different model for the final transcript",
+              )}
+            </label>
+            {c.finalTranscription && (
+              <ModelPicker
+                label={t("Endgültiges Transkript", "Final transcript")}
+                task="final-transcription"
+                value={c.finalTranscription}
+                t={t}
+                onChange={(finalTranscription) => patch({ finalTranscription })}
+              />
+            )}
+            <p className="small muted">
+              {t(
+                "Nach dem Meeting wird Audio mit größerem Kontext verarbeitet. Ein Live-Profil benötigt dafür zusätzliche Rechenzeit bzw. API-Anfragen.",
+                "After the meeting, audio is processed with larger context. Live profiles require additional processing time or API calls for this pass.",
+              )}
+            </p>
             <ModelPicker
               label={t("Auswertung & Assistenz", "Analysis & assistance")}
               task="analysis"

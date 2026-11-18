@@ -1,8 +1,39 @@
 {
-  "whisper": { "repository": "https://github.com/ggml-org/whisper.cpp", "tag": "v1.9.5", "commit": "d1be6fde11ac6e0407606b4e42fe72d34add8037" },
-  "llama": { "repository": "https://github.com/ggml-org/llama.cpp", "tag": "v1.0.0", "commit": "b1b770d90d94cad9e9ea5b993bdbc383a522fb28" },
+  "whisper": {
+    "repository": "https://github.com/ggml-org/whisper.cpp",
+    "tag": "v1.9.5",
+    "commit": "d1be6fde11ac6e0407606b4e42fe72d34add8037"
+  },
+  "llama": {
+    "repository": "https://github.com/ggml-org/llama.cpp",
+    "tag": "v1.0.0",
+    "commit": "b1b770d90d94cad9e9ea5b993bdbc383a522fb28"
+  },
   "ffmpeg": {
-    "win32": { "url": "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-17-12-40/ffmpeg-n8.1.3-35-gf1acb0a266-win64-lgpl-8.1.zip", "sha256": "18391ca66565f110267357a7a290d72dbca2032859764a13e1de3b1938055965" },
-    "linux": { "url": "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-17-12-40/ffmpeg-n8.1.3-35-gf1acb0a266-linux64-lgpl-8.1.tar.xz", "sha256": "b3a5ec05fe4c183a99fed05dc320011ff477513f179cae2993037583b99e3580" }
+    "win32": {
+      "url": "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-17-12-40/ffmpeg-n8.1.3-35-gf1acb0a266-win64-lgpl-8.1.zip",
+      "sha256": "18391ca66565f110267357a7a290d72dbca2032859764a13e1de3b1938055965"
+    },
+    "linux": {
+      "url": "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-17-12-40/ffmpeg-n8.1.3-35-gf1acb0a266-linux64-lgpl-8.1.tar.xz",
+      "sha256": "b3a5ec05fe4c183a99fed05dc320011ff477513f179cae2993037583b99e3580"
+    }
+  },
+  "codecs": {
+    "ffmpeg": {
+      "repository": "https://github.com/FFmpeg/FFmpeg",
+      "tag": "n8.1.3",
+      "commit": "1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7"
+    },
+    "opus": {
+      "repository": "https://github.com/xiph/opus",
+      "tag": "v1.5.2",
+      "commit": "ddbe48383984d56acd9e1ab6a090c54ca6b735a6"
+    },
+    "libvpx": {
+      "repository": "https://github.com/webmproject/libvpx",
+      "tag": "v1.15.2",
+      "commit": "d168454ecd099805c675d4a98c66f4891373302a"
+    }
   }
 }

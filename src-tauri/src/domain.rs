@@ -75,6 +75,8 @@ pub struct MeetingConfig {
     pub system_device: Option<String>,
     pub video: VideoSelection,
     pub transcription: ModelSelection,
+    #[serde(default)]
+    pub final_transcription: Option<ModelSelection>,
     pub analysis: ModelSelection,
     pub vision: ModelSelection,
     pub video_analysis: VideoAnalysis,
@@ -100,6 +102,7 @@ impl Default for MeetingConfig {
                 provider: Provider::Local,
                 model: "whisper-small".into(),
             },
+            final_transcription: None,
             analysis: ModelSelection {
                 provider: Provider::Local,
                 model: "qwen-text".into(),
@@ -141,6 +144,43 @@ impl MeetingConfig {
             anyhow::ensure!(
                 !selection.model.trim().is_empty() && selection.model.len() <= 200,
                 "Select a model for each task."
+            );
+        }
+        if let Some(selection) = &self.final_transcription {
+            anyhow::ensure!(
+                !selection.model.trim().is_empty() && selection.model.len() <= 200,
+                "Select a final transcription model."
+            );
+            anyhow::ensure!(
+                matches!(selection.provider, Provider::Local | Provider::Openai),
+                "Final transcription requires local Whisper or OpenAI."
+            );
+            anyhow::ensure!(
+                !self.offline || selection.provider == Provider::Local,
+                "Offline mode requires a local final transcription model."
+            );
+        }
+        for selection in [&self.transcription]
+            .into_iter()
+            .chain(self.final_transcription.iter())
+        {
+            if selection.provider == Provider::Local {
+                anyhow::ensure!(
+                    ["whisper-small", "whisper-turbo"].contains(&selection.model.as_str()),
+                    "Select a Whisper model for speech recognition."
+                );
+            }
+        }
+        if self.analysis.provider == Provider::Local {
+            anyhow::ensure!(
+                ["qwen-text", "qwen-vision"].contains(&self.analysis.model.as_str()),
+                "Select a language model for analysis."
+            );
+        }
+        if self.video_analysis != VideoAnalysis::None && self.vision.provider == Provider::Local {
+            anyhow::ensure!(
+                self.vision.model == "qwen-vision",
+                "Image analysis requires the local vision model."
             );
         }
         if self.offline {

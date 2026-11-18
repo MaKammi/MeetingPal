@@ -162,7 +162,7 @@ impl Store {
         Ok(())
     }
     pub fn enqueue(&self, job: &Job) -> Result<()> {
-        self.db.lock().unwrap().execute("INSERT OR IGNORE INTO jobs(id,meeting_id,kind,payload,state) VALUES(?1,?2,?3,?4,'pending')", params![job.id, job.meeting_id, job.kind, job.payload])?;
+        self.db.lock().unwrap().execute("INSERT OR IGNORE INTO jobs(id,meeting_id,kind,payload,state) VALUES(?1,?2,?3,?4,CASE WHEN EXISTS(SELECT 1 FROM jobs WHERE meeting_id=?2 AND state IN ('failed','paused')) THEN 'paused' ELSE 'pending' END)", params![job.id, job.meeting_id, job.kind, job.payload])?;
         Ok(())
     }
     pub fn next_job(&self) -> Result<Option<Job>> {
@@ -185,10 +185,14 @@ impl Store {
         } else {
             "failed"
         };
-        self.db.lock().unwrap().execute(
+        let db = self.db.lock().unwrap();
+        db.execute(
             "UPDATE jobs SET state=?2,error=?3,next_at=unixepoch()+min(60,5*attempts) WHERE id=?1",
             params![id, state, error],
         )?;
+        if state == "failed" {
+            db.execute("UPDATE jobs SET state='paused' WHERE state='pending' AND meeting_id=(SELECT meeting_id FROM jobs WHERE id=?1)", [id])?;
+        }
         Ok(())
     }
     pub fn jobs(&self, meeting_id: &str) -> Result<Vec<Job>> {
@@ -198,7 +202,7 @@ impl Store {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
     pub fn retry_jobs(&self, id: &str) -> Result<()> {
-        self.db.lock().unwrap().execute("UPDATE jobs SET state='pending',attempts=0,error=NULL,next_at=0 WHERE meeting_id=?1 AND state='failed'", [id])?;
+        self.db.lock().unwrap().execute("UPDATE jobs SET state='pending',attempts=0,error=NULL,next_at=0 WHERE meeting_id=?1 AND state IN ('failed','paused')", [id])?;
         Ok(())
     }
     pub fn defer_job(&self, id: &str) -> Result<()> {
@@ -344,5 +348,38 @@ mod tests {
         fs::write(path.with_extension("json.pending"), br#"{"answer":42}"#).unwrap();
         let result: serde_json::Value = read_json(&path).unwrap();
         assert_eq!(result["answer"], 42);
+    }
+    #[test]
+    fn provider_failure_pauses_existing_and_new_work_until_retry() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path().into()).unwrap();
+        let meeting = Meeting::new(MeetingConfig::default());
+        store.save(&meeting).unwrap();
+        let job = |id: &str| Job {
+            id: id.into(),
+            meeting_id: meeting.id.clone(),
+            kind: "transcribe".into(),
+            payload: String::new(),
+            state: "pending".into(),
+            attempts: 0,
+            error: None,
+        };
+        store.enqueue(&job("a")).unwrap();
+        store.enqueue(&job("b")).unwrap();
+        store.next_job().unwrap().unwrap();
+        store.finish_job("a", Some("invalid key"), false).unwrap();
+        store.enqueue(&job("c")).unwrap();
+        assert!(store.next_job().unwrap().is_none());
+        assert_eq!(
+            store
+                .jobs(&meeting.id)
+                .unwrap()
+                .iter()
+                .filter(|j| j.state == "paused")
+                .count(),
+            2
+        );
+        store.retry_jobs(&meeting.id).unwrap();
+        assert!(store.next_job().unwrap().is_some());
     }
 }

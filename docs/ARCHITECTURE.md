@@ -19,7 +19,7 @@ flowchart LR
 
 `src-tauri/src/capture.rs` startet als `--capture-worker` im selben Programm, aber eigenem Prozess. Steuerung über stdin, Ereignisse als JSON über stdout. Die Aufnahme hängt weder an Modellantworten noch an Browser-Rendering. Mikrofon und Loopback liefern 48-kHz-Mono-Spuren auf einer gemeinsamen aktiven Zeitleiste; Pause entfernt Zeit aus dieser Zeitleiste. Fehlende Samples bleiben als Lücken erhalten. Der Mix verändert die Originalspuren nicht.
 
-Windows nutzt flexaudio/WASAPI und scap/Windows Graphics Capture. macOS nutzt CoreAudio für das Mikrofon und ScreenCaptureKit für Systemton und Bild; der Audio-Pfad verwirft die kleinen Video-Callback-Buffer. Linux nutzt flexaudio/PipeWire und xcap für Portal-/X11-Aufnahmen. Der vendorte scap-Stand enthält dokumentierte Kompatibilitätskorrekturen.
+Windows nutzt flexaudio/WASAPI und scap/Windows Graphics Capture. macOS nutzt CoreAudio für das Mikrofon und ScreenCaptureKit für Systemton und Bild; der Audio-Pfad verwirft die kleinen Video-Callback-Buffer. Linux nutzt flexaudio/PipeWire, einen eigenen Portal-/PipeWire-Adapter mit dem freigegebenen Remote-Dateideskriptor und xcap für X11-Aufnahmen. Der vendorte scap-Stand enthält dokumentierte Kompatibilitätskorrekturen.
 
 Video wird vor dem Encoder und jeder KI-Verarbeitung zugeschnitten. Ungültige Regionen werden abgelehnt. Die Auflösung wird auf maximal 1920 Pixel Breite, zehn Bilder pro Sekunde begrenzt. Ein Ausfall der Videoquelle erzeugt eine Warnung und schwarze Bilder; Audio bleibt aktiv. Ein Ausfall des Encoders wird separat gemeldet.
 
@@ -55,4 +55,4 @@ Aufträge verwenden deterministische IDs. Neustart setzt unterbrochene Aufträge
 
 llama.cpp wird bei Bedarf als authentifizierter Loopback-Server gestartet. Er lauscht ausschließlich auf `127.0.0.1`; sein zufälliges Prozess-Token ist kein Cloud-Schlüssel. whisper.cpp läuft als begrenzter Unterprozess. Cloud-Anfragen durchlaufen eine Prüfung des lokalen Profils und eine atomare Budgetreservierung. Eine API-Anfrage kann unterschiedliche Kosten haben: Das Budget ist eine Aufrufgrenze, keine Euro-Obergrenze.
 
-Live-Transkription nutzt abgeschlossene Abschnitte. Live-Assistenz ergänzt ungefähr minütlich die bisherigen Notizen. Die aktuelle Finalisierung markiert die geprüften Abschnittsergebnisse als endgültig und erstellt eine Gesamtauswertung; eine zweite, überlappende ASR-Runde ist noch auf der Aufgabenliste.
+Live-Transkription nutzt abgeschlossene Abschnitte. Live-Assistenz ergänzt ungefähr minütlich die bisherigen Notizen. Die Finalisierung transkribiert größere Abschnitte mit mehr Kontext erneut, optional mit einem separat gewählten Modell. Erfolgreiche Abschnitte werden zur Wiederaufnahme zwischengespeichert. Bereiche mit manuellen Korrekturen bleiben erhalten; danach entsteht die Gesamtauswertung.

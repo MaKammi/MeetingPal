@@ -1,4 +1,6 @@
 pub mod capture;
+#[cfg(target_os = "linux")]
+mod capture_linux;
 #[cfg(target_os = "macos")]
 mod capture_mac_audio;
 pub mod commands;

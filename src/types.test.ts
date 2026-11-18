@@ -4,6 +4,11 @@ describe("meeting data disclosure", () => {
   it("shows no upload for a completely local profile", () => {
     expect(disclosure(defaultConfig())).toEqual([]);
   });
+  it("discloses cloud audio in a separately selected final transcription pass", () => {
+    const config=defaultConfig();
+    config.finalTranscription={provider:"openai",model:"test"};
+    expect(disclosure(config)).toEqual([{task:"final-transcription",provider:"openai",data:"audio"}]);
+  });
   it("distinguishes sending a transcript from sending raw audio", () => {
     const config = defaultConfig();
     config.offline = false;

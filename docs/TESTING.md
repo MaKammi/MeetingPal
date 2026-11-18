@@ -40,3 +40,12 @@ Zielgeräte: Windows 11 x64; macOS 14.2+ Intel und Apple Silicon; Ubuntu 24.04 G
 - Modelldateien bleiben getrennte, ausdrückliche Downloads; Lizenzdarstellung prüfen.
 - Abnahmematrix mit Messwerten ausfüllen; keine ungeprüften Zielwerte als Garantien veröffentlichen.
 - Testpakete sind private Actions-Artefakte, keine öffentliche Veröffentlichung oder automatische Updates.
+
+## Lokal nachgewiesen (18. November 2026)
+
+- Windows: Frontend-Build, Unit-Tests und Browser-Interaktion erfolgreich.
+- Windows: kompletter synthetischer Videoimport → Wiedergabe → Frame-Auswahl → PDF/Markdown/JSON/SRT/VTT erfolgreich.
+- Windows: echte Whisper-Small-Transkription des öffentlichen Benchmark-Audios, lokale Qwen3-Auswertung mit Quellenprüfung und Meeting-Frage erfolgreich; null Cloud-Anfragen.
+- Windows: Desktop-App startet; alle vier gebündelten Laufzeiten werden als bereit erkannt.
+
+Die opt-in Integrationstests stehen unter `src-tauri/tests`. `cargo test --manifest-path src-tauri/Cargo.toml --test pipeline -- --ignored` benötigt die gebündelten Codecs. `--test local_ai -- --ignored` lädt ausdrücklich etwa 3 GB öffentliche Modelle nach `runtime-data/test-models` und prüft die echte lokale KI. Diese Tests zeichnen weder Mikrofon noch Bildschirm auf.

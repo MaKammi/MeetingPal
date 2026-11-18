@@ -92,6 +92,7 @@ impl MacAudio {
                                 frame_index,
                                 peak,
                                 dropped_before: dropped,
+                                discontinuity: dropped > 0,
                             };
                             frame_index += 960;
                             match tx.try_send(chunk) {

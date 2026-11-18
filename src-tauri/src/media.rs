@@ -131,7 +131,6 @@ pub async fn playback(store: &Store, runtimes: &Runtimes, id: &str) -> Result<St
             "copy".into(),
             "-c:a".into(),
             "libopus".into(),
-            "-shortest".into(),
             folder.join("playback.webm").to_string_lossy().into(),
         ];
         run(&runtimes.get("ffmpeg")?, &args, Duration::from_secs(600)).await?;
@@ -262,6 +261,8 @@ pub async fn import(
                     "realtime".into(),
                     "-b:v".into(),
                     "1500k".into(),
+                    "-g".into(),
+                    "50".into(),
                     folder.join("video-import.webm").to_string_lossy().into(),
                 ],
                 Duration::from_secs(7200),
@@ -361,22 +362,27 @@ pub async fn native_clips(
             "60".into(),
             "-reset_timestamps".into(),
             "1".into(),
+            "-segment_list".into(),
+            folder.join("clip-index.csv").to_string_lossy().into(),
             folder.join("clip-%06d.webm").to_string_lossy().into(),
         ],
         Duration::from_secs(600),
     )
     .await?;
-    let mut files: Vec<_> = fs::read_dir(&folder)?
-        .filter_map(|e| e.ok())
-        .filter_map(|e| e.file_name().into_string().ok())
-        .filter(|s| s.starts_with("clip-") && s.ends_with(".webm"))
-        .collect();
-    files.sort();
-    Ok(files
-        .into_iter()
-        .enumerate()
-        .map(|(i, f)| (f, i as u64 * 60_000))
-        .collect())
+    let mut clips = Vec::new();
+    for line in fs::read_to_string(folder.join("clip-index.csv"))?.lines() {
+        let columns = line.split(',').collect::<Vec<_>>();
+        anyhow::ensure!(columns.len() == 3, "Invalid video segment index");
+        let file = Path::new(columns[0].trim_matches('"'))
+            .file_name()
+            .context("Missing clip filename")?
+            .to_string_lossy()
+            .to_string();
+        anyhow::ensure!(safe_child(&folder, &file)?.is_file(), "Missing video clip");
+        let seconds: f64 = columns[1].parse()?;
+        clips.push((file, (seconds.max(0.0) * 1000.0).round() as u64));
+    }
+    Ok(clips)
 }
 pub fn silence(samples: &[f32]) -> bool {
     samples.is_empty()

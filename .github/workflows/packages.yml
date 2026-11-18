@@ -4,7 +4,23 @@ on:
 permissions:
   contents: read
 jobs:
+  windows-codecs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24'
+      - run: sudo apt-get update && sudo apt-get install -y mingw-w64 nasm cmake pkg-config
+      - run: node scripts/build-codecs.mjs --target=win32
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-source-codecs
+          path: src-tauri/binaries/
+          retention-days: 7
   package:
+    needs: windows-codecs
     strategy:
       fail-fast: false
       matrix:
@@ -27,8 +43,8 @@ jobs:
       CARGO_BUILD_JOBS: 3
       MACOSX_DEPLOYMENT_TARGET: '14.2'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '24'
           cache: npm
@@ -40,12 +56,22 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libpipewire-0.3-dev libspa-0.2-dev libdbus-1-dev libxcb-randr0-dev libwayland-dev libclang-dev libxdo-dev libsecret-1-dev clang cmake
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libpipewire-0.3-dev libspa-0.2-dev libdbus-1-dev libxcb-randr0-dev libwayland-dev libgbm-dev libegl1-mesa-dev libclang-dev libxdo-dev libsecret-1-dev clang cmake nasm pkg-config
       - name: macOS codec tools
         if: runner.os == 'macOS'
         run: brew install nasm pkg-config
       - run: npm ci
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        if: runner.os == 'Windows'
+        with:
+          name: windows-source-codecs
+          path: src-tauri/binaries/
+      - run: node scripts/build-runtimes.mjs --only=whisper,llama
+        if: runner.os == 'Windows'
       - run: npm run runtimes:build
+        if: runner.os != 'Windows'
+      - name: Media pipeline with bundled codecs
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test pipeline -- --ignored
       - run: npm run check
       - run: npm run desktop:build -- --bundles ${{ matrix.bundles }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

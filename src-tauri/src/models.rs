@@ -63,11 +63,17 @@ impl Models {
             serde_json::from_str(include_str!("../../resources/models.json"))
                 .expect("validated model catalog");
         for spec in &mut specs {
-            spec.installed = self.root.join(&spec.id).join("verified.json").exists()
-                && spec.files.iter().all(|f| {
-                    fs::metadata(self.root.join(&spec.id).join(&f.filename))
-                        .is_ok_and(|m| m.len() == f.bytes)
-                });
+            let verified: Option<ModelSpec> =
+                crate::storage::read_json(&self.root.join(&spec.id).join("verified.json")).ok();
+            spec.installed = verified.is_some_and(|v| {
+                v.files.len() == spec.files.len()
+                    && v.files.iter().zip(&spec.files).all(|(a, b)| {
+                        a.filename == b.filename && a.sha256 == b.sha256 && a.bytes == b.bytes
+                    })
+            }) && spec.files.iter().all(|f| {
+                fs::metadata(self.root.join(&spec.id).join(&f.filename))
+                    .is_ok_and(|m| m.len() == f.bytes)
+            });
         }
         specs
     }
@@ -112,6 +118,16 @@ impl Models {
         Ok(())
     }
     pub async fn download(&self, id: String, app: &tauri::AppHandle) -> Result<()> {
+        self.download_with_progress(id, |progress| {
+            let _ = app.emit("model-download", progress);
+        })
+        .await
+    }
+    pub async fn download_with_progress(
+        &self,
+        id: String,
+        progress: impl Fn(DownloadProgress) + Send + Sync,
+    ) -> Result<()> {
         let spec = self.spec(&id)?;
         anyhow::ensure!(
             self.active.lock().unwrap().insert(id.clone()),
@@ -122,25 +138,22 @@ impl Models {
             .lock()
             .unwrap()
             .insert(id.clone(), cancel.clone());
-        let result = self.download_inner(&spec, app, cancel).await;
+        let result = self.download_inner(&spec, &progress, cancel).await;
         self.active.lock().unwrap().remove(&id);
         self.cancelled.lock().unwrap().remove(&id);
-        let _ = app.emit(
-            "model-download",
-            DownloadProgress {
-                id,
-                received: 0,
-                total: spec.files.iter().map(|f| f.bytes).sum(),
-                state: if result.is_ok() { "complete" } else { "failed" }.into(),
-                error: result.as_ref().err().map(|e| e.to_string()),
-            },
-        );
+        progress(DownloadProgress {
+            id,
+            received: 0,
+            total: spec.files.iter().map(|f| f.bytes).sum(),
+            state: if result.is_ok() { "complete" } else { "failed" }.into(),
+            error: result.as_ref().err().map(|e| e.to_string()),
+        });
         result
     }
     async fn download_inner(
         &self,
         spec: &ModelSpec,
-        app: &tauri::AppHandle,
+        progress: &(impl Fn(DownloadProgress) + Send + Sync),
         cancel: Arc<AtomicBool>,
     ) -> Result<()> {
         let folder = self.root.join(&spec.id);
@@ -185,16 +198,13 @@ impl Models {
                 digest.update(&bytes);
                 output.write_all(&bytes).await?;
                 if last.elapsed().as_millis() > 200 {
-                    let _ = app.emit(
-                        "model-download",
-                        DownloadProgress {
-                            id: spec.id.clone(),
-                            received: received + file_size,
-                            total,
-                            state: "downloading".into(),
-                            error: None,
-                        },
-                    );
+                    progress(DownloadProgress {
+                        id: spec.id.clone(),
+                        received: received + file_size,
+                        total,
+                        state: "downloading".into(),
+                        error: None,
+                    });
                     last = std::time::Instant::now();
                 }
             }

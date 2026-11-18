@@ -20,8 +20,10 @@ pub fn enqueue_segment(state: &AppState, id: &str, segment: &MediaSegment) -> Re
 }
 pub fn enqueue_final(state: &AppState, id: &str) -> Result<()> {
     let meeting = state.store.load(id)?;
-    for segment in &meeting.media {
-        enqueue_segment(state, id, segment)?;
+    if meeting.config.mode != Mode::Post {
+        for segment in &meeting.media {
+            enqueue_segment(state, id, segment)?;
+        }
     }
     state.store.enqueue(&Job {
         id: format!("{id}:finalize"),
@@ -32,8 +34,18 @@ pub fn enqueue_final(state: &AppState, id: &str) -> Result<()> {
         attempts: 0,
         error: None,
     })?;
+    let paused = state
+        .store
+        .jobs(id)?
+        .iter()
+        .any(|j| matches!(j.state.as_str(), "failed" | "paused"));
     state.store.update(id, |m| {
-        m.status = "processing".into();
+        m.status = if paused {
+            "needs_attention"
+        } else {
+            "processing"
+        }
+        .into();
         Ok(())
     })?;
     Ok(())
@@ -55,7 +67,7 @@ pub fn start(state: Arc<AppState>, app: tauri::AppHandle) {
                             }
                         }
                     }
-                    let result = process(&state, &job).await;
+                    let result = process(&state, &job, &app).await;
                     let retry = result
                         .as_ref()
                         .err()
@@ -84,7 +96,7 @@ pub fn start(state: Arc<AppState>, app: tauri::AppHandle) {
         }
     });
 }
-async fn process(state: &AppState, job: &Job) -> Result<()> {
+async fn process(state: &AppState, job: &Job, app: &tauri::AppHandle) -> Result<()> {
     let meeting = state.store.load(&job.meeting_id)?;
     match job.kind.as_str() {
         "transcribe" => {
@@ -124,15 +136,11 @@ async fn process(state: &AppState, job: &Job) -> Result<()> {
             }
         }
         "finalize" => {
-            anyhow::ensure!(
-                !state
-                    .store
-                    .jobs(&meeting.id)?
-                    .iter()
-                    .any(|j| j.kind == "transcribe" && j.state == "failed"),
-                "Some transcription jobs failed. Fix the reported issue and retry processing."
-            );
             crate::media::playback(&state.store, &state.runtimes, &meeting.id).await?;
+            refine_transcript(state, &meeting, || {
+                let _ = app.emit("meeting-changed", &meeting.id);
+            })
+            .await?;
             if meeting.config.video_analysis != VideoAnalysis::None {
                 let native = meeting.config.video_analysis == VideoAnalysis::Native;
                 let frames = if native {
@@ -186,6 +194,78 @@ async fn process(state: &AppState, job: &Job) -> Result<()> {
             })?;
         }
         _ => anyhow::bail!("Unknown processing job"),
+    }
+    Ok(())
+}
+
+/// Larger context in the final pass; cache each successful section before moving on.
+/// Edited source sections keep their original IDs and wording.
+pub async fn refine_transcript(
+    state: &AppState,
+    meeting: &Meeting,
+    progress: impl Fn(),
+) -> Result<()> {
+    use crate::storage::{atomic_json, read_json};
+    let folder = state.store.folder(&meeting.id)?;
+    let mut final_config = meeting.clone();
+    final_config.status = "processing".into();
+    if let Some(selection) = &meeting.config.final_transcription {
+        final_config.config.transcription = selection.clone();
+    }
+    for (index, group) in meeting.media.chunks(12).enumerate() {
+        let start_ms = group.first().unwrap().start_ms;
+        let end_ms = group.last().unwrap().end_ms;
+        let current = state.store.load(&meeting.id)?;
+        if current
+            .transcript
+            .iter()
+            .any(|s| s.edited && s.start_ms < end_ms && s.end_ms > start_ms)
+        {
+            continue;
+        }
+        let identity = serde_json::json!({"selection":final_config.config.transcription,"language":meeting.config.language,"segments":group});
+        let cached_path = folder.join(format!("refinement-{index:06}.json"));
+        let cached: Option<serde_json::Value> = read_json(&cached_path).ok();
+        let transcript: Vec<TranscriptSegment> =
+            if let Some(cache) = cached.filter(|c| c["identity"] == identity) {
+                serde_json::from_value(cache["transcript"].clone())?
+            } else {
+                let file = format!("final-audio-{index:06}.wav");
+                crate::media::concat_wav(&folder, group, &folder.join(&file))?;
+                let section = MediaSegment {
+                    id: format!("final-{index:06}"),
+                    start_ms,
+                    end_ms,
+                    microphone: None,
+                    desktop: None,
+                    mixed: file,
+                };
+                final_config.transcript = current.transcript.clone();
+                let transcript = state.ai.transcribe(state, &final_config, &section).await?;
+                atomic_json(
+                    &cached_path,
+                    &serde_json::json!({"identity":identity,"transcript":transcript}),
+                )?;
+                transcript
+            };
+        state.store.update(&meeting.id, |m| {
+            // A user may have edited this region while inference was running.
+            if !m
+                .transcript
+                .iter()
+                .any(|s| s.edited && s.start_ms < end_ms && s.end_ms > start_ms)
+            {
+                m.transcript
+                    .retain(|s| s.start_ms >= end_ms || s.end_ms <= start_ms);
+                m.transcript.extend(transcript);
+                m.transcript.sort_by_key(|s| s.start_ms);
+            }
+            if let Some(analysis) = &mut m.analysis {
+                analysis.provisional = true;
+            }
+            Ok(())
+        })?;
+        progress();
     }
     Ok(())
 }

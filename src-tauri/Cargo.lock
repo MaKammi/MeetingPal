@@ -133,6 +133,7 @@ dependencies = [
  "pipewire",
  "serde",
  "serde_repr",
+ "tokio",
  "zbus 6.3.0",
 ]
 
@@ -3175,6 +3176,7 @@ name = "meetingpal"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ashpd",
  "base64 0.22.1",
  "chrono",
  "flexaudio",
@@ -3185,6 +3187,7 @@ dependencies = [
  "image",
  "keyring",
  "lopdf",
+ "pipewire",
  "reqwest 0.12.28",
  "rusqlite",
  "scap",
@@ -7680,6 +7683,7 @@ dependencies = [
  "serde",
  "serde_repr",
  "socket2",
+ "tokio",
  "uds_windows",
  "uuid",
  "windows-sys 0.61.2",

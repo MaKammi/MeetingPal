@@ -41,7 +41,9 @@ for (const [name,target] of [['whisper','whisper-cli'],['llama','llama-server']]
 }
 if(selected('ffmpeg')) {
   const archive=lock.ffmpeg[process.platform];
-  if(archive) {
+  if(process.platform!=='win32') {
+    await run(process.execPath,[path.join(root,'scripts/build-codecs.mjs')]);
+  } else if(archive) {
     const archivePath=path.join(cache,path.basename(new URL(archive.url).pathname));
     if(!existsSync(archivePath)) { const response=await fetch(archive.url); if(!response.ok) throw new Error(`FFmpeg download: ${response.status}`); await pipeline(response.body,createWriteStream(archivePath)); }
     const hash=createHash('sha256'); for await(const chunk of createReadStream(archivePath))hash.update(chunk);
@@ -52,21 +54,6 @@ if(selected('ffmpeg')) {
     for(const name of ['ffmpeg','ffprobe']) { const binary=all.find(p=>path.basename(p)===name+(process.platform==='win32'?'.exe':'')); if(!binary)throw new Error(`Missing ${name}`); await copyFile(binary,path.join(output,path.basename(binary))); }
     for(const file of all.filter(p=>/license|copying/i.test(path.basename(p))))await copyFile(file,path.join(output,'ffmpeg-'+path.basename(file)));
     await writeFile(path.join(output,'ffmpeg-provenance.json'),JSON.stringify(archive,null,2));
-  } else if(process.platform==='darwin') {
-    const prefix=path.join(cache,'ffmpeg-prefix'); await mkdir(prefix,{recursive:true});
-    const opus=await clone('opus','https://github.com/xiph/opus','v1.5.2');
-    await run(cmake,['-S',opus,'-B',path.join(opus,'build'),`-DCMAKE_INSTALL_PREFIX=${prefix}`,'-DCMAKE_BUILD_TYPE=Release','-DBUILD_SHARED_LIBS=OFF']);
-    await run(cmake,['--build',path.join(opus,'build'),'--parallel',jobs]); await run(cmake,['--install',path.join(opus,'build')]);
-    const vpx=await clone('libvpx','https://chromium.googlesource.com/webm/libvpx','v1.15.2');
-    await run('sh',['configure',`--prefix=${prefix}`,'--disable-examples','--disable-tools','--disable-docs','--disable-unit-tests','--disable-vp9','--disable-shared','--enable-static','--disable-assembly'],vpx);
-    await run('make',['-j',jobs],vpx);await run('make',['install'],vpx);
-    const ffmpeg=await clone('ffmpeg','https://github.com/FFmpeg/FFmpeg','n8.1.3');
-    const env={...process.env,PKG_CONFIG_PATH:path.join(prefix,'lib/pkgconfig')};
-    await run('sh',['configure','--disable-gpl','--disable-nonfree','--disable-shared','--enable-static','--disable-autodetect','--disable-doc','--disable-debug','--disable-ffplay','--disable-network','--enable-libvpx','--enable-libopus','--pkg-config-flags=--static',`--extra-cflags=-I${prefix}/include`,`--extra-ldflags=-L${prefix}/lib`],ffmpeg,env);
-    await run('make',['-j',jobs],ffmpeg,env);
-    for(const name of ['ffmpeg','ffprobe'])await copyFile(path.join(ffmpeg,name),path.join(output,name));
-    for(const [name,dir]of[['ffmpeg',ffmpeg],['opus',opus],['libvpx',vpx]])await run('git',['archive','--format=tar.gz','--output',path.join(output,`${name}-source.tar.gz`),'HEAD'],dir);
-    await copyFile(path.join(ffmpeg,'COPYING.LGPLv2.1'),path.join(output,'ffmpeg-LICENSE.txt'));
   } else throw new Error('Unsupported platform for runtime build');
 }
 await copyFile(path.join(root,'resources/runtimes.json'),path.join(output,'runtime-versions.json'));

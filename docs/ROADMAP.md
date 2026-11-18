@@ -22,7 +22,7 @@
 - [x] Cloud-Anbieter, Offline-Prüfung, Aufrufbudget, fortsetzbare Aufträge.
 - [x] Alle drei Betriebsarten, Meeting-Fragen, Bilder und native Gemini-Videoclips.
 - [ ] Echte API-Abnahme für die vom Nutzer gewählten Modelle; Matrix modellgenauer Fähigkeiten erweitern.
-- [ ] Zweite ASR-Runde mit größerem Kontext und optionalem Turbo-Modell für endgültige Transkripte.
+- [x] Zweite ASR-Runde mit größerem Kontext und optionalem Turbo-Modell; Wiederaufnahme ohne doppelte Verarbeitung.
 - [ ] Automatische Sprechertrennung über geeignete Modelle; gegenwärtig manuelle Labels.
 - [ ] Lange native Videos über Anbieter-Datei-Uploads unterstützen; derzeit konservative Clipgrößengrenze.
 - [ ] Optional Streaming auf Token-/Wortebene und parallele Priorisierung der KI-Aufträge.
@@ -33,6 +33,6 @@
 - [x] Einwilligung, Übertragungsübersicht, lokale Speicherverwaltung, keine Telemetrie.
 - [ ] Vollständige Offline-Netzwerkprüfung des installierten Produkts und Performance-Matrix.
 - [ ] Signierte Windows-/macOS-Pakete, Notarisierung und vollständige Distributions-/Lizenzabnahme.
-- [ ] Accessibility- und vollständiger Sprachreview, Ergebniseditor für einzelne Auswertungspunkte.
+- [ ] Accessibility- und vollständiger Sprachreview; weitere Komfortfunktionen.
 
 Team-Synchronisierung, Kalender, automatische Veröffentlichung und automatische Updates sind bewusst spätere Produktphasen.

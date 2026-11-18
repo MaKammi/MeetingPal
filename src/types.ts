@@ -17,6 +17,7 @@ export interface MeetingConfig {
     crop: { x: number; y: number; width: number; height: number } | null;
   };
   transcription: ModelSelection;
+  finalTranscription: ModelSelection | null;
   analysis: ModelSelection;
   vision: ModelSelection;
   videoAnalysis: "none" | "frames" | "native";
@@ -159,6 +160,7 @@ export const defaultConfig = (): MeetingConfig => ({
   systemDevice: null,
   video: { kind: "none", id: null, crop: null },
   transcription: { provider: "local", model: "whisper-small" },
+  finalTranscription: null,
   analysis: { provider: "local", model: "qwen-text" },
   vision: { provider: "local", model: "qwen-vision" },
   videoAnalysis: "none",
@@ -189,6 +191,16 @@ export function disclosure(config: MeetingConfig) {
       task: "analysis",
       provider: config.analysis.provider,
       data: "transcript",
+    });
+  if (
+    config.finalTranscription &&
+    config.finalTranscription.provider !== "local" &&
+    config.finalTranscription.provider !== config.transcription.provider
+  )
+    transmissions.push({
+      task: "final-transcription",
+      provider: config.finalTranscription.provider,
+      data: "audio",
     });
   if (config.videoAnalysis !== "none" && config.vision.provider !== "local")
     transmissions.push({

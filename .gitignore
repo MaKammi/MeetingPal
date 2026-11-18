@@ -23,6 +23,10 @@ src-tauri/binaries/*
 vendor/
 
 *.tsbuildinfo
+settings.json
+library.sqlite*
+secrets*.json
+credentials*.json
 src-tauri/gen/
 src-tauri/icons/android/
 src-tauri/icons/ios/

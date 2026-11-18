@@ -175,6 +175,7 @@ fn sources() -> Result<Vec<Source>> {
     Ok(out)
 }
 pub fn hidden_command(path: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[allow(unused_mut)]
     let mut cmd = Command::new(path);
     #[cfg(windows)]
     {
@@ -201,6 +202,7 @@ pub(crate) struct LaneChunk {
     pub frame_index: u64,
     pub peak: f32,
     pub dropped_before: u32,
+    pub discontinuity: bool,
 }
 enum AudioInput {
     Native(flexaudio::Stream),
@@ -232,6 +234,9 @@ impl AudioInput {
                 frame_index: c.frame_index,
                 peak: c.peak,
                 dropped_before: c.dropped_before,
+                discontinuity: c.flags.intersects(
+                    flexaudio::ChunkFlags::DISCONTINUITY | flexaudio::ChunkFlags::RECOVERED,
+                ),
             }),
             #[cfg(target_os = "macos")]
             Self::Screen(s) => s.poll_chunk(),
@@ -292,6 +297,9 @@ impl AudioLane {
     }
     fn drain(&mut self, active_ms: u64, committed: u64, paused: bool, name: &str) {
         while let Some(chunk) = self.stream.poll_chunk() {
+            if chunk.discontinuity || self.last_data.elapsed() > Duration::from_millis(500) {
+                self.anchor = None;
+            }
             self.last_data = Instant::now();
             self.received = true;
             self.warned = false;
@@ -369,7 +377,7 @@ pub fn write_wav(path: &Path, samples: &[f32], rate: u32) -> Result<()> {
         wav.write_sample((sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)?;
     }
     wav.finalize()?;
-    fs::File::open(path)?.sync_all()?;
+    fs::OpenOptions::new().write(true).open(path)?.sync_all()?;
     Ok(())
 }
 pub fn mix_audio(mic: &[f32], desktop: &[f32], echo_control: bool) -> Vec<f32> {
@@ -437,7 +445,7 @@ pub fn crop_frame(frame: RgbaImage, crop: Option<&Crop>) -> Result<RgbaImage> {
         Ok(frame)
     }
 }
-type SharedFrame = Arc<Mutex<Option<RgbaImage>>>;
+pub(crate) type SharedFrame = Arc<Mutex<Option<RgbaImage>>>;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn capture_frames(
     selection: VideoSelection,
@@ -507,6 +515,9 @@ fn capture_frames(
     latest: SharedFrame,
     running: Arc<AtomicBool>,
 ) -> Result<()> {
+    if std::env::var("XDG_SESSION_TYPE").as_deref() == Ok("wayland") {
+        return crate::capture_linux::portal_capture(selection, latest, running);
+    }
     if selection.kind == VideoKind::Window
         && std::env::var("XDG_SESSION_TYPE").as_deref() != Ok("wayland")
     {
@@ -526,8 +537,7 @@ fn capture_frames(
         let monitor = monitors
             .iter()
             .find(|m| m.id().ok().map(|id| id.to_string()) == selection.id)
-            .or_else(|| monitors.first())
-            .context("No display available")?;
+            .context("The selected display is no longer available")?;
         let (recorder, receiver) = monitor.video_recorder()?;
         recorder.start()?;
         while running.load(Ordering::Relaxed) {
@@ -716,6 +726,10 @@ pub fn run_worker(spec_path: &Path) -> Result<()> {
     .context("Desktop audio could not be opened")?;
     microphone.stream.start()?;
     desktop.stream.start()?;
+    // Starting one native device can take longer than the other. Discard setup-time
+    // audio before establishing the common origin so it cannot offset the tracks.
+    microphone.drain(0, 0, true, "Microphone");
+    desktop.drain(0, 0, true, "Desktop audio");
     let video_worker = if let Some(ffmpeg) = spec
         .ffmpeg
         .clone()
@@ -743,6 +757,11 @@ pub fn run_worker(spec_path: &Path) -> Result<()> {
     let mut space_at = Instant::now();
     while running.load(Ordering::Relaxed) {
         let now = Instant::now();
+        if now.duration_since(last) > Duration::from_secs(2) && !paused.load(Ordering::SeqCst) {
+            paused.store(true, Ordering::SeqCst);
+            warning("Recording paused after a system suspension or long scheduling gap. Check your devices, then resume.");
+            emit(CaptureEvent::State { paused: true });
+        }
         let is_paused = paused.load(Ordering::SeqCst);
         if !is_paused {
             active_duration += now.duration_since(last);
@@ -811,6 +830,15 @@ pub fn run_worker(spec_path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn committed_wav_can_be_flushed_and_reopened() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("segment.wav");
+        write_wav(&file, &vec![0.2; 48000], 48000).unwrap();
+        let reader = hound::WavReader::open(file).unwrap();
+        assert_eq!(reader.duration(), 48000);
+        assert_eq!(reader.spec().sample_rate, 48000);
+    }
     #[test]
     fn crop_never_leaks_pixels_outside_selection() {
         let mut image = RgbaImage::from_pixel(10, 10, image::Rgba([255, 0, 0, 255]));

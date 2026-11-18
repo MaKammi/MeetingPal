@@ -225,6 +225,9 @@ async fn start_recording_inner(
                 }
                 CaptureEvent::Level { .. } => {}
                 CaptureEvent::State { paused } => {
+                    if let Some(active) = state.recording.lock().await.as_mut() {
+                        active.paused = paused;
+                    }
                     let _ = state.store.update(&id, |m| {
                         m.status = if paused { "paused" } else { "recording" }.into();
                         Ok(())
@@ -483,7 +486,12 @@ pub fn retry_processing(
         })
         .map_err(message)?;
     state.store.retry_jobs(&id).map_err(message)?;
-    jobs::enqueue_final(&state, &id).map_err(message)?;
+    if !matches!(
+        state.store.load(&id).map_err(message)?.status.as_str(),
+        "recording" | "paused" | "starting"
+    ) {
+        jobs::enqueue_final(&state, &id).map_err(message)?;
+    }
     changed(&app, &id);
     Ok(())
 }
