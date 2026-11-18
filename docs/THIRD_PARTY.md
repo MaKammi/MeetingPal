@@ -2,6 +2,8 @@
 
 Die Quellstände der KI-Laufzeiten und die Hashes der FFmpeg-Archive stehen in `resources/runtimes.json`. `scripts/build-runtimes.mjs` kopiert Lizenzen, Provenienz und Quellarchive in das Runtime-Paket. Die App ruft FFmpeg als separaten Prozess auf und verlinkt keine FFmpeg-Bibliotheken in Rust.
 
+Vor jedem Desktop-Build erzeugt `scripts/build-notices.mjs` zusätzlich `THIRD_PARTY_NOTICES.txt` aus den tatsächlich aufgelösten Rust-Abhängigkeiten und den npm-Produktionsabhängigkeiten. Vorhandene Lizenz-/Copyright-Dateien werden vollständig übernommen; die Noto-Schriftlizenz und diese Distributionshinweise werden ebenfalls mitgeliefert. Dieser automatisch erzeugte Bestand ersetzt nicht die Prüfung zusätzlich im Installationsformat enthaltener Systembibliotheken, insbesondere bei Linux-AppImages.
+
 | Bestandteil | Lizenz / Quelle |
 |---|---|
 | Tauri | MIT / Apache-2.0; Cargo-Lockfile |

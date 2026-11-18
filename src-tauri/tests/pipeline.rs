@@ -9,12 +9,21 @@ use std::{path::PathBuf, time::Duration};
 
 /// Run explicitly after building runtimes. No microphone, screen or cloud is used.
 #[tokio::test]
-#[ignore = "requires bundled FFmpeg runtimes"]
+#[ignore = "requires all bundled runtimes"]
 async fn video_import_playback_visual_evidence_and_exports() {
     let temp = tempfile::tempdir().unwrap();
     let runtimes = Runtimes {
         directory: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"),
     };
+    for (name, argument) in [("whisper-cli", "--help"), ("llama-server", "--version")] {
+        media::run(
+            &runtimes.get(name).unwrap(),
+            &[argument.into()],
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    }
     let store = Store::open(temp.path().join("library")).unwrap();
     let wav = temp.path().join("fixture.wav");
     media::create_synthetic_audio(&wav, 12).unwrap();

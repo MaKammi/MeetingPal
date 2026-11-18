@@ -97,6 +97,11 @@ async fn downloaded_models_transcribe_and_analyze_real_fixture() {
     let analysis = state.ai.analyze(&state, &meeting, false).await.unwrap();
     assert!(!analysis.summary.is_empty());
     analysis.validate_sources(&meeting.source_ids()).unwrap();
+    let repeated = state.ai.analyze(&state, &meeting, false).await.unwrap();
+    assert_eq!(
+        serde_json::to_value(&analysis.summary).unwrap(),
+        serde_json::to_value(&repeated.summary).unwrap()
+    );
     let answer = state
         .ai
         .answer(&state, &meeting, "What does the speaker ask people to do?")

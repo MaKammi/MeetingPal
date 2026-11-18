@@ -3,7 +3,7 @@
   "productName": "MeetingPal",
   "version": "0.1.0",
   "identifier": "de.meetingpal.desktop",
-  "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
+  "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build && node scripts/build-notices.mjs", "frontendDist": "../dist" },
   "app": {
     "windows": [{ "label": "main", "title": "MeetingPal", "width": 1320, "height": 900, "minWidth": 960, "minHeight": 640 }],
     "security": {

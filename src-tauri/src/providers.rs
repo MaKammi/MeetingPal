@@ -643,17 +643,36 @@ impl AnalysisProvider for Ai {
         let mut combined = AnalysisResult::default();
         for evidence in chunks {
             let prompt=format!("{SCHEMA}\nMeeting: {}. Language: {}. Extract notes from this section. Include a short factual summary of the supplied speech even for a monologue or informal discussion. Only the other four lists may be empty.\n<untrusted_evidence>\n{evidence}\n</untrusted_evidence>",meeting.config.title,meeting.config.language);
-            let part: AnalysisResult = serde_json::from_value(
-                self.json_request(
-                    state,
-                    meeting,
-                    &meeting.config.analysis,
-                    &prompt,
-                    None,
-                    OutputShape::Analysis,
-                )
-                .await?,
+            use sha2::{Digest, Sha256};
+            let identity = serde_json::to_vec(
+                &json!({"version":1,"system":SYSTEM,"selection":meeting.config.analysis,"prompt":prompt}),
             )?;
+            let cache_folder = state
+                .store
+                .folder(&meeting.id)?
+                .join("results/analysis-cache");
+            fs::create_dir_all(&cache_folder)?;
+            let cache_file =
+                cache_folder.join(format!("{}.json", hex::encode(Sha256::digest(identity))));
+            let part: AnalysisResult =
+                if let Ok(cached) = crate::storage::read_json::<AnalysisResult>(&cache_file) {
+                    cached
+                } else {
+                    let part: AnalysisResult = serde_json::from_value(
+                        self.json_request(
+                            state,
+                            meeting,
+                            &meeting.config.analysis,
+                            &prompt,
+                            None,
+                            OutputShape::Analysis,
+                        )
+                        .await?,
+                    )?;
+                    part.validate_sources(&meeting.source_ids())?;
+                    crate::storage::atomic_json(&cache_file, &part)?;
+                    part
+                };
             part.validate_sources(&meeting.source_ids())?;
             combined.summary.extend(part.summary);
             combined.topics.extend(part.topics);
