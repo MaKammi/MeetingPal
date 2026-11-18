@@ -2113,13 +2113,13 @@ function MeetingPage({
       )}
       {m.status === "needs_attention" ||
       m.status === "recovered" ||
+      jobs.some((job) => job.state === "failed" || job.state === "paused") ||
       (m.status === "recorded" && !m.tags.includes("audio-test")) ? (
         <div className="recovery-bar">
           <span>
-            {t(
-              "Die Aufnahme ist lokal gespeichert. Du kannst die Verarbeitung fortsetzen.",
-              "Your recording is saved locally. You can resume processing.",
-            )}
+            {active
+              ? t("Die KI-Verarbeitung wartet. Du kannst sie fortsetzen; die Aufnahme bleibt davon unabhängig.", "AI processing is waiting. You can resume it independently of the recording.")
+              : t("Die Aufnahme ist lokal gespeichert. Du kannst die Verarbeitung fortsetzen.", "Your recording is saved locally. You can resume processing.")}
           </span>
           <input
             type="number"

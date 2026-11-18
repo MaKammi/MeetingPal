@@ -159,6 +159,7 @@ struct LocalServer {
 }
 pub struct Ai {
     client: reqwest::Client,
+    local_client: reqwest::Client,
     local: Mutex<Option<LocalServer>>,
 }
 impl Ai {
@@ -166,6 +167,12 @@ impl Ai {
         Ok(Self {
             client: reqwest::Client::builder()
                 .connect_timeout(Duration::from_secs(20))
+                .timeout(Duration::from_secs(240))
+                .build()?,
+            // A user's HTTP_PROXY must never route local meeting content off this device.
+            local_client: reqwest::Client::builder()
+                .no_proxy()
+                .connect_timeout(Duration::from_secs(5))
                 .timeout(Duration::from_secs(240))
                 .build()?,
             local: Mutex::new(None),
@@ -241,7 +248,7 @@ impl Ai {
                     anyhow::bail!("The local model could not start. Check available memory and local-runtime.log.");
                 }
                 if self
-                    .client
+                    .local_client
                     .get(format!("http://127.0.0.1:{port}/health"))
                     .bearer_auth(&server.token)
                     .send()
@@ -263,7 +270,7 @@ impl Ai {
         } else {
             json!(prompt)
         };
-        let response=self.client.post(format!("http://127.0.0.1:{}/v1/chat/completions",server.port)).bearer_auth(&server.token)
+        let response=self.local_client.post(format!("http://127.0.0.1:{}/v1/chat/completions",server.port)).bearer_auth(&server.token)
             .json(&json!({"model":selection.model,"messages":[{"role":"system","content":SYSTEM},{"role":"user","content":content}],"temperature":0.0,"max_tokens":2048,"response_format":{"type":"json_object","schema":shape.schema(sources)}})).send().await?;
         checked_json(response).await
     }

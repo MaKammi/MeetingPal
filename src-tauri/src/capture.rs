@@ -184,7 +184,7 @@ pub fn hidden_command(path: impl AsRef<std::ffi::OsStr>) -> Command {
     }
     cmd
 }
-fn emit(event: CaptureEvent) {
+pub(crate) fn emit(event: CaptureEvent) {
     if let Ok(json) = serde_json::to_string(&event) {
         println!("{json}");
         let _ = std::io::stdout().flush();

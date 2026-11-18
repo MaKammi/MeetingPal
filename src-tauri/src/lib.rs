@@ -30,10 +30,16 @@ pub struct AppState {
 pub fn entry() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("--capture-worker") {
-        return capture::run_worker(std::path::Path::new(
+        let result = capture::run_worker(std::path::Path::new(
             args.get(2)
                 .ok_or_else(|| anyhow::anyhow!("Missing worker specification"))?,
         ));
+        if let Err(error) = &result {
+            capture::emit(capture::CaptureEvent::Warning {
+                message: format!("Recording failed: {error:#}"),
+            });
+        }
+        return result;
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
