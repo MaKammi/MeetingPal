@@ -75,6 +75,35 @@ async fn downloaded_models_transcribe_and_analyze_real_fixture() {
         "Expected recognized speech from the public fixture"
     );
     state.store.save(&meeting).unwrap();
+    meeting.media.push(segment);
+    state.store.save(&meeting).unwrap();
+    meetingpal_lib::jobs::refine_transcript(&state, &meeting, || {})
+        .await
+        .unwrap();
+    meeting = state.store.load(&meeting.id).unwrap();
+    assert!(!meeting.transcript.is_empty());
+    assert!(meeting
+        .transcript
+        .iter()
+        .all(|s| s.id.starts_with("final-") && !s.provisional));
+    let refined = serde_json::to_value(&meeting.transcript).unwrap();
+    meetingpal_lib::jobs::refine_transcript(&state, &meeting, || {})
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(state.store.load(&meeting.id).unwrap().transcript).unwrap(),
+        refined
+    );
+    meeting.transcript[0].text = "This is a manual correction about the country.".into();
+    meeting.transcript[0].edited = true;
+    state.store.save(&meeting).unwrap();
+    meetingpal_lib::jobs::refine_transcript(&state, &meeting, || {})
+        .await
+        .unwrap();
+    assert_eq!(
+        state.store.load(&meeting.id).unwrap().transcript[0].text,
+        meeting.transcript[0].text
+    );
     let analysis = state.ai.analyze(&state, &meeting, false).await.unwrap();
     assert!(!analysis.summary.is_empty());
     analysis.validate_sources(&meeting.source_ids()).unwrap();

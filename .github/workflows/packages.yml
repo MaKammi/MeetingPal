@@ -12,8 +12,15 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '24'
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: codecs
+        with:
+          path: src-tauri/binaries/
+          key: windows-source-codecs-${{ hashFiles('scripts/build-codecs.mjs', 'resources/runtimes.json') }}
       - run: sudo apt-get update && sudo apt-get install -y mingw-w64 nasm cmake pkg-config
+        if: steps.codecs.outputs.cache-hit != 'true'
       - run: node scripts/build-codecs.mjs --target=win32
+        if: steps.codecs.outputs.cache-hit != 'true'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-source-codecs

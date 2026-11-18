@@ -44,6 +44,21 @@ pub fn subtitles(meeting: &Meeting, vtt: bool) -> String {
     out
 }
 pub fn markdown(meeting: &Meeting) -> String {
+    report(meeting, true)
+}
+fn anchor(id: &str) -> String {
+    format!("source-{}", hex::encode(id.as_bytes()))
+}
+fn source_label(meeting: &Meeting, id: &str) -> String {
+    if let Some(s) = meeting.transcript.iter().find(|s| s.id == id) {
+        timestamp(s.start_ms, '.')
+    } else if let Some(v) = meeting.visuals.iter().find(|v| v.id == id) {
+        format!("Video {}", timestamp(v.at_ms, '.'))
+    } else {
+        id.to_owned()
+    }
+}
+fn report(meeting: &Meeting, links: bool) -> String {
     let mut out = format!(
         "# {}\n\n{} · {}\n\n",
         meeting.config.title,
@@ -61,7 +76,7 @@ pub fn markdown(meeting: &Meeting) -> String {
             out.push_str(&format!("## {title}\n\n"));
             for item in items {
                 out.push_str(&format!(
-                    "- {}{}{} [{}]\n",
+                    "- {}{}{} ({})\n",
                     item.text,
                     item.owner
                         .as_ref()
@@ -71,7 +86,18 @@ pub fn markdown(meeting: &Meeting) -> String {
                         .as_ref()
                         .map(|s| format!(" · {s}"))
                         .unwrap_or_default(),
-                    item.sources.join(", ")
+                    item.sources
+                        .iter()
+                        .map(|id| {
+                            let label = source_label(meeting, id);
+                            if links {
+                                format!("[{label}](#{})", anchor(id))
+                            } else {
+                                format!("{label}; {id}")
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ));
             }
             out.push('\n');
@@ -82,13 +108,40 @@ pub fn markdown(meeting: &Meeting) -> String {
         meeting.notes
     ));
     for s in &meeting.transcript {
+        if links {
+            out.push_str(&format!("<a id=\"{}\"></a>\n\n", anchor(&s.id)));
+        }
         out.push_str(&format!(
-            "[{}] **{}** {} <!-- {} -->\n\n",
+            "### {} · {}\n\n{}\n\nSource: {}\n\n",
             timestamp(s.start_ms, '.'),
             s.speaker.as_deref().unwrap_or("Speaker"),
             s.text,
             s.id
         ));
+    }
+    if !meeting.visuals.is_empty() {
+        out.push_str("## Visual evidence\n\n");
+        for v in &meeting.visuals {
+            if links {
+                out.push_str(&format!("<a id=\"{}\"></a>\n\n", anchor(&v.id)));
+            }
+            out.push_str(&format!(
+                "### Video {}\n\n{}\n\nSource: {}\n\n",
+                timestamp(v.at_ms, '.'),
+                v.text,
+                v.id
+            ));
+        }
+    }
+    if !meeting.markers.is_empty() {
+        out.push_str("## Bookmarks\n\n");
+        for marker in &meeting.markers {
+            out.push_str(&format!(
+                "- {} — {}\n",
+                timestamp(marker.at_ms, '.'),
+                marker.text
+            ));
+        }
     }
     out
 }
@@ -106,10 +159,10 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
     let bytes = include_bytes!("../../resources/NotoSans-Regular.ttf");
     let face =
         ttf_parser::Face::parse(bytes, 0).map_err(|_| anyhow::anyhow!("Invalid PDF font"))?;
-    let text = markdown(meeting).replace("**", "");
+    let text = report(meeting, false);
     let mut chars = BTreeMap::<u16, char>::new();
     let mut lines = vec![];
-    for original in text.lines() {
+    for original in text.lines().map(|s| s.trim_start_matches('#').trim()) {
         let mut line = String::new();
         let mut width = 0.0f32;
         for word in original.split_whitespace() {
@@ -124,6 +177,29 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
                 })
                 .sum::<f32>()
                 + 3.0;
+            if w > 490.0 {
+                if !line.is_empty() {
+                    lines.push(line);
+                    line = String::new();
+                    width = 0.0;
+                }
+                for c in word.chars() {
+                    let advance = face
+                        .glyph_index(c)
+                        .and_then(|g| face.glyph_hor_advance(g))
+                        .unwrap_or(500) as f32
+                        / face.units_per_em() as f32
+                        * 10.0;
+                    if width + advance > 490.0 && !line.is_empty() {
+                        lines.push(line);
+                        line = String::new();
+                        width = 0.0;
+                    }
+                    line.push(c);
+                    width += advance;
+                }
+                continue;
+            }
             if width + w > 490.0 && !line.is_empty() {
                 lines.push(line);
                 line = String::new();
@@ -232,6 +308,29 @@ mod tests {
     #[test]
     fn subtitle_timestamps_cover_long_meetings() {
         assert_eq!(timestamp(3_661_042, ','), "01:01:01,042");
+    }
+    #[test]
+    fn exports_include_resolvable_visual_sources() {
+        let mut m = Meeting::new(MeetingConfig::default());
+        m.visuals.push(VisualEvidence {
+            id: "frame-1".into(),
+            at_ms: 15000,
+            text: "Slide: next release in December".into(),
+            file: "frame-1.jpg".into(),
+        });
+        m.analysis = Some(AnalysisResult {
+            summary: vec![EvidenceItem {
+                text: "Release planned".into(),
+                sources: vec!["frame-1".into()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        let markdown = markdown(&m);
+        assert!(markdown.contains(&format!("(#{}", anchor("frame-1"))));
+        assert!(markdown.contains(&format!("id=\"{}\"", anchor("frame-1"))));
+        assert!(markdown.contains("Slide: next release in December"));
+        assert!(!report(&m, false).contains("<a id="));
     }
     #[test]
     fn pdf_is_valid_and_paginates() {

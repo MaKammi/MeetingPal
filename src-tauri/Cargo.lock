@@ -133,7 +133,6 @@ dependencies = [
  "pipewire",
  "serde",
  "serde_repr",
- "tokio",
  "zbus 6.3.0",
 ]
 
@@ -7683,7 +7682,6 @@ dependencies = [
  "serde",
  "serde_repr",
  "socket2",
- "tokio",
  "uds_windows",
  "uuid",
  "windows-sys 0.61.2",

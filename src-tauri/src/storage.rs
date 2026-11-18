@@ -13,6 +13,8 @@ pub struct Store {
     pub root: PathBuf,
     db: Mutex<Connection>,
     gate: Mutex<()>,
+    // Held for the lifetime of the store; prevents a second app from resetting active jobs.
+    _library_lock: fs::File,
 }
 pub fn atomic_json(path: &Path, value: &impl Serialize) -> Result<()> {
     let tmp = path.with_extension("json.pending");
@@ -71,6 +73,14 @@ impl Store {
     pub fn open(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(root.join("meetings"))?;
         fs::create_dir_all(root.join("models"))?;
+        let library_lock = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(root.join("library.lock"))?;
+        fs2::FileExt::try_lock_exclusive(&library_lock)
+            .context("This MeetingPal library is already open in another app instance.")?;
         let db = Connection::open(root.join("library.sqlite"))?;
         db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
             CREATE TABLE IF NOT EXISTS meetings(id TEXT PRIMARY KEY, summary TEXT NOT NULL, search TEXT NOT NULL);
@@ -81,6 +91,7 @@ impl Store {
             root,
             db: Mutex::new(db),
             gate: Mutex::new(()),
+            _library_lock: library_lock,
         };
         store.rebuild_index()?;
         Ok(store)
@@ -234,7 +245,21 @@ impl Store {
                     if entry.file_type()?.is_file()
                         && matches!(
                             p.extension().and_then(|s| s.to_str()),
-                            Some("wav" | "webm" | "mp4" | "mkv" | "jpg" | "png")
+                            Some(
+                                "wav"
+                                    | "mp3"
+                                    | "m4a"
+                                    | "flac"
+                                    | "ogg"
+                                    | "opus"
+                                    | "aac"
+                                    | "webm"
+                                    | "mp4"
+                                    | "mkv"
+                                    | "mov"
+                                    | "jpg"
+                                    | "png"
+                            )
                         )
                     {
                         fs::remove_file(p)?;
@@ -278,6 +303,35 @@ fn job_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Job> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_one_store_can_own_a_library() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path().into()).unwrap();
+        assert!(Store::open(dir.path().into()).is_err());
+        drop(store);
+        assert!(Store::open(dir.path().into()).is_ok());
+    }
+    #[test]
+    fn media_deletion_removes_imports_but_preserves_notes() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path().into()).unwrap();
+        let mut meeting = Meeting::new(MeetingConfig::default());
+        meeting.notes = "Keep these notes".into();
+        store.save(&meeting).unwrap();
+        let folder = store.folder(&meeting.id).unwrap();
+        let extensions = [
+            "wav", "mp3", "m4a", "flac", "ogg", "opus", "aac", "webm", "mp4", "mkv", "mov", "jpg",
+            "png",
+        ];
+        for extension in extensions {
+            fs::write(folder.join(format!("original.{extension}")), b"media").unwrap();
+        }
+        store.delete(&meeting.id, true).unwrap();
+        for extension in extensions {
+            assert!(!folder.join(format!("original.{extension}")).exists());
+        }
+        assert_eq!(store.load(&meeting.id).unwrap().notes, meeting.notes);
+    }
     #[test]
     fn paths_cannot_escape() {
         let d = tempfile::tempdir().unwrap();
