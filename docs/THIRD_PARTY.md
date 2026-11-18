@@ -25,4 +25,4 @@ Die Paket-Pipeline baut FFmpeg, Opus und libvpx aus den unter `codecs` gepinnten
 
 Der Windows-Entwicklungsbefehl verwendet als schnellere Bootstrap-Option noch ein hashgeprüftes LGPL-Archiv von FFmpeg-Builds. Für weiterzugebende Pakete verwendet die CI ausschließlich den eigenen Quellbuild. Dessen `windows-source-codecs`-Artefakt kann auch lokal in `src-tauri/binaries` entpackt werden. Den Bootstrap-Build nicht als abgeschlossene Distributionsfreigabe behandeln.
 
-Vor externer Verteilung die [FFmpeg-Weitergabehinweise](https://ffmpeg.org/legal.html) und sämtliche Abhängigkeiten prüfen. Private Testpakete sind noch keine abgeschlossene Lizenz- oder Signierungsfreigabe. Für den eigenen MeetingPal-Code wird durch dieses private Repository keine öffentliche Open-Source-Lizenz erteilt.
+MeetingPals eigener Code steht unter [AGPL-3.0-only](../LICENSE). Der passende Quellstand ist über das jeweilige [Release-Tag](https://github.com/MaKammi/MeetingPal/releases) zugänglich. Die oben aufgeführten Bestandteile behalten ihre eigenen Lizenzen. Für die Weitergabe von FFmpeg gelten die [FFmpeg-Weitergabehinweise](https://ffmpeg.org/legal.html).

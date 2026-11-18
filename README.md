@@ -1,6 +1,6 @@
 # MeetingPal
 
-Desktop-App für lokale Meeting-Aufnahmen und KI-gestützte Protokolle. Privates Repository: **MaKammi/MeetingPal**.
+Desktop-App für lokale Meeting-Aufnahmen und KI-gestützte Protokolle. MeetingPals eigener Quellcode steht unter der [GNU Affero General Public License, Version 3 (AGPL-3.0-only)](LICENSE). Für Beiträge gilt das [Contributor License Agreement](CONTRIBUTING.md).
 
 **Status: 0.1.0 – Entwicklungsversion.** Die Anwendung enthält native Aufnahme, Verarbeitung und eine bedienbare Oberfläche. Die Freigabe als verlässliches Aufnahmeprodukt setzt die noch offenen Hardware- und Langzeittests in [TESTING.md](docs/TESTING.md) voraus. Insbesondere die Zielwerte von 100 ms Synchronität und maximal fünf Sekunden Verlust sind noch keine nachgewiesenen Garantien.
 

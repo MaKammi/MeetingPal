@@ -33,6 +33,7 @@ for (const p of dependencies.sort((a, b) => a.name.localeCompare(b.name))) {
   }
 }
 await writeFile(path.join(output, 'THIRD_PARTY_NOTICES.txt'), notices);
+await copyFile(path.join(root, 'LICENSE'), path.join(output, 'MeetingPal-LICENSE.txt'));
 await copyFile(path.join(root, 'resources/NotoSans-LICENSE.txt'), path.join(output, 'NotoSans-LICENSE.txt'));
 await copyFile(path.join(root, 'docs/THIRD_PARTY.md'), path.join(output, 'DISTRIBUTION-NOTES.md'));
 console.log(`Bundled notices for ${dependencies.length} dependencies (${copied} license/notice files).`);
