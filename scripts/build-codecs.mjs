@@ -23,10 +23,10 @@ await run('cmake',['-S',opus,'-B',path.join(opus,'build'),`-DCMAKE_INSTALL_PREFI
 await run('cmake',['--build',path.join(opus,'build'),'--parallel',jobs],root,env);await run('cmake',['--install',path.join(opus,'build')],root,env);
 const vpx=await source('libvpx');
 const vpxTarget=cross?'x86_64-win64-gcc':process.platform==='darwin'?(process.arch==='arm64'?'arm64-darwin20-gcc':'x86_64-darwin20-gcc'):'x86_64-linux-gcc';
-await run('sh',['configure',`--prefix=${prefix}`,`--target=${vpxTarget}`,'--disable-examples','--disable-tools','--disable-docs','--disable-unit-tests','--disable-vp9','--disable-shared','--enable-static'],vpx,env);
+await run('sh',['./configure',`--prefix=${prefix}`,`--target=${vpxTarget}`,'--disable-examples','--disable-tools','--disable-docs','--disable-unit-tests','--disable-vp9','--disable-shared','--enable-static'],vpx,env);
 await run('make',['-j',jobs],vpx,env);await run('make',['install'],vpx,env);
 const ffmpeg=await source('ffmpeg');
-await run('sh',['configure','--disable-gpl','--disable-nonfree','--disable-version3','--disable-shared','--enable-static','--disable-autodetect','--disable-doc','--disable-debug','--disable-ffplay','--disable-network','--disable-devices','--enable-indev=lavfi','--enable-libvpx','--enable-libopus','--pkg-config-flags=--static',`--extra-cflags=-I${prefix}/include`,`--extra-ldflags=-L${prefix}/lib${cross?' -static':''}`,...(cross?['--target-os=mingw32','--arch=x86_64','--enable-cross-compile',`--cross-prefix=${tool}`]:[])],ffmpeg,env);
+await run('sh',['./configure','--disable-gpl','--disable-nonfree','--disable-version3','--disable-shared','--enable-static','--disable-autodetect','--disable-doc','--disable-debug','--disable-ffplay','--disable-network','--disable-devices','--enable-indev=lavfi','--enable-libvpx','--enable-libopus','--pkg-config-flags=--static',`--extra-cflags=-I${prefix}/include`,`--extra-ldflags=-L${prefix}/lib${cross?' -static':''}`,...(cross?['--target-os=mingw32','--arch=x86_64','--enable-cross-compile',`--cross-prefix=${tool}`]:[])],ffmpeg,env);
 await run('make',['-j',jobs],ffmpeg,env);
 for(const name of ['ffmpeg','ffprobe'])await copyFile(path.join(ffmpeg,name+(cross?'.exe':'')),path.join(output,name+(cross?'.exe':'')));
 for(const [name,dir,license]of[['ffmpeg',ffmpeg,'COPYING.LGPLv2.1'],['opus',opus,'COPYING'],['libvpx',vpx,'LICENSE']]){await run('git',['archive','--format=tar.gz','--output',path.join(output,`${name}-source.tar.gz`),'HEAD'],dir);await copyFile(path.join(dir,license),path.join(output,`${name}-LICENSE.txt`));}
