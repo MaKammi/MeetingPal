@@ -82,12 +82,24 @@ jobs:
         if: runner.os == 'Windows' && steps.runtimes.outputs.cache-hit != 'true'
       - run: npm run runtimes:build
         if: runner.os != 'Windows' && steps.runtimes.outputs.cache-hit != 'true'
+      - name: Free temporary runtime and debug build space
+        run: node scripts/clean-package-runner.mjs before-build
       - name: Media pipeline with bundled codecs
-        run: cargo test --manifest-path src-tauri/Cargo.toml --test pipeline -- --ignored
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --release --test pipeline -- --ignored
       - run: npm run check
       - run: npm run desktop:build -- --bundles ${{ matrix.bundles }}
+      - name: Record installer checksums and source revision
+        run: node scripts/package-manifest.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: meetingpal-${{ matrix.name }}-unsigned-test
-          path: src-tauri/target/release/bundle/
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/build-info.json
+          if-no-files-found: error
           retention-days: 7
+      - name: Free uploaded package staging before saving caches
+        run: node scripts/clean-package-runner.mjs after-upload

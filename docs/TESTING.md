@@ -40,6 +40,7 @@ Zielgeräte: Windows 11 x64; macOS 14.2+ Intel und Apple Silicon; Ubuntu 24.04 G
 - Modelldateien bleiben getrennte, ausdrückliche Downloads; Lizenzdarstellung prüfen.
 - Abnahmematrix mit Messwerten ausfüllen; keine ungeprüften Zielwerte als Garantien veröffentlichen.
 - Testpakete sind private Actions-Artefakte, keine öffentliche Veröffentlichung oder automatische Updates.
+- Der manuell gestartete Paketlauf prüft die Medienpipeline mit den tatsächlich gebündelten Codecs im Release-Profil. Downloads enthalten die Installer und `build-info.json` mit Commit, Größe und SHA-256; sie bleiben sieben Tage in GitHub Actions verfügbar. Temporäre Quell-/Debug- und Paketverzeichnisse werden auf den CI-Runnern vor dem Speichern der Caches entfernt.
 
 ## Lokal nachgewiesen (18. November 2026)
 
