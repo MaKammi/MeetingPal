@@ -445,7 +445,8 @@ pub fn crop_frame(frame: RgbaImage, crop: Option<&Crop>) -> Result<RgbaImage> {
         Ok(frame)
     }
 }
-pub(crate) type SharedFrame = Arc<Mutex<Option<RgbaImage>>>;
+#[doc(hidden)]
+pub type SharedFrame = Arc<Mutex<Option<RgbaImage>>>;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn capture_frames(
     selection: VideoSelection,
@@ -551,7 +552,8 @@ fn capture_frames(
     }
     Ok(())
 }
-fn encode_video(
+#[doc(hidden)]
+pub fn encode_video(
     ffmpeg: PathBuf,
     folder: PathBuf,
     latest: SharedFrame,
@@ -585,6 +587,8 @@ fn encode_video(
             "-i",
             "pipe:0",
             "-an",
+            "-pix_fmt",
+            "yuv420p",
             "-c:v",
             "libvpx",
             "-deadline",

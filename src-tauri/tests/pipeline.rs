@@ -5,7 +5,14 @@ use meetingpal_lib::{
     media::{self, Runtimes},
     storage::Store,
 };
-use std::{path::PathBuf, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, AtomicU64},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
 
 /// Run explicitly after building runtimes. No microphone, screen or cloud is used.
 #[tokio::test]
@@ -25,6 +32,55 @@ async fn video_import_playback_visual_evidence_and_exports() {
         .unwrap();
     }
     let store = Store::open(temp.path().join("library")).unwrap();
+    // Exercise the actual recording encoder with RGBA input, including its alpha channel.
+    // A synthetic YUV video alone would miss VP8's auto_alt_ref/transparency incompatibility.
+    let raw_folder = temp.path().join("raw-capture");
+    std::fs::create_dir_all(&raw_folder).unwrap();
+    let cropped = capture::crop_frame(
+        image::RgbaImage::from_pixel(160, 90, image::Rgba([30, 90, 200, 255])),
+        Some(&Crop {
+            x: 10,
+            y: 10,
+            width: 80,
+            height: 50,
+        }),
+    )
+    .unwrap();
+    capture::encode_video(
+        runtimes.get("ffmpeg").unwrap(),
+        raw_folder.clone(),
+        Arc::new(Mutex::new(Some(cropped))),
+        Arc::new(AtomicU64::new(12_000)),
+        Arc::new(AtomicBool::new(false)),
+    )
+    .unwrap();
+    let encoded: Vec<_> = std::fs::read_dir(&raw_folder)
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| e.path().extension().is_some_and(|s| s == "webm"))
+        .collect();
+    assert_eq!(encoded.len(), 3);
+    let raw_probe = media::run(
+        &runtimes.get("ffprobe").unwrap(),
+        &[
+            "-v".into(),
+            "error".into(),
+            "-show_streams".into(),
+            "-of".into(),
+            "json".into(),
+            raw_folder
+                .join("video-000000.webm")
+                .to_string_lossy()
+                .into(),
+        ],
+        Duration::from_secs(30),
+    )
+    .await
+    .unwrap();
+    let raw_probe: serde_json::Value = serde_json::from_slice(&raw_probe.stdout).unwrap();
+    assert_eq!(raw_probe["streams"][0]["width"], 80);
+    assert_eq!(raw_probe["streams"][0]["height"], 50);
+    assert_eq!(raw_probe["streams"][0]["pix_fmt"], "yuv420p");
     let wav = temp.path().join("fixture.wav");
     media::create_synthetic_audio(&wav, 12).unwrap();
     let video = temp.path().join("fixture.webm");

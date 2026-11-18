@@ -257,6 +257,8 @@ pub async fn import(
                     "scale='min(1920,iw)':-2,fps=10".into(),
                     "-c:v".into(),
                     "libvpx".into(),
+                    "-pix_fmt".into(),
+                    "yuv420p".into(),
                     "-deadline".into(),
                     "realtime".into(),
                     "-b:v".into(),

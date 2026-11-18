@@ -45,6 +45,7 @@ Zielgeräte: Windows 11 x64; macOS 14.2+ Intel und Apple Silicon; Ubuntu 24.04 G
 
 - Windows: Frontend-Build, Unit-Tests und Browser-Interaktion erfolgreich.
 - Windows: kompletter synthetischer Videoimport → Wiedergabe → Frame-Auswahl → PDF/Markdown/JSON/SRT/VTT erfolgreich.
+- Windows: derselbe Encoder wie bei Bildschirmaufnahmen verarbeitet künstliche RGBA-Bilder inklusive Zuschnitt zu drei abspielbaren VP8-Segmenten. Ausgabegröße und undurchsichtiges YUV420P werden geprüft; damit ist der zuvor beobachtete Transparenz-/`auto_alt_ref`-Fehler abgedeckt.
 - Windows: echte Whisper-Small-Transkription des öffentlichen Benchmark-Audios, abschließende Transkript-Nachbearbeitung, idempotente Wiederholung und Erhalt manueller Korrekturen erfolgreich. Lokale Qwen3-Auswertung mit schemaerzwungenen Quellen und Meeting-Frage erfolgreich; null Cloud-Anfragen.
 - Windows: Desktop-App startet; alle vier gebündelten Laufzeiten werden als bereit erkannt.
 - Windows: Der lokale KI-Integrationstest besteht auch mit absichtlich unerreichbaren `HTTP_PROXY`-/`HTTPS_PROXY`-/`ALL_PROXY`-Zielen und leerem `NO_PROXY`, sobald die Modelle installiert sind. Loopback-Inferenz verwendet einen separaten Client ohne Proxy. Dies ergänzt die noch offene vollständige Netzwerk-/Firewall-Abnahme.
