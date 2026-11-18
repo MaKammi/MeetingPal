@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>NSMicrophoneUsageDescription</key><string>MeetingPal records your microphone only when you start a recording or audio test.</string>
+<key>NSAudioCaptureUsageDescription</key><string>MeetingPal records desktop audio as a separate meeting track.</string>
+<key>NSScreenCaptureUsageDescription</key><string>MeetingPal records the screen, window or region that you select.</string>
+<key>LSMinimumSystemVersion</key><string>14.2</string>
+</dict></plist>

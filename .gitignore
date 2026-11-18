@@ -21,3 +21,10 @@ test-results/
 src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 vendor/
+
+*.tsbuildinfo
+src-tauri/gen/
+src-tauri/icons/android/
+src-tauri/icons/ios/
+third-party/*/.github/
+third-party/*/.vscode/

@@ -1,0 +1,54 @@
+name: Desktop checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, macos-15-intel, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: 3
+      MACOSX_DEPLOYMENT_TARGET: '14.2'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a
+        with:
+          workspaces: src-tauri
+      - name: Linux development libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libpipewire-0.3-dev libspa-0.2-dev libdbus-1-dev libxcb-randr0-dev libwayland-dev libclang-dev libxdo-dev libsecret-1-dev clang cmake
+      - run: npm ci
+      - run: npm run check
+      - name: Native format
+        working-directory: src-tauri
+        run: cargo fmt --check
+      - name: Native tests and application compilation
+        working-directory: src-tauri
+        run: cargo test --locked
+      - name: Build desktop executable
+        run: npm run desktop:build -- --no-bundle --debug
+      - name: Browser interaction tests
+        if: runner.os == 'Linux'
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e

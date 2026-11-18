@@ -1,0 +1,58 @@
+[package]
+name = "meetingpal"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Local-first meeting recorder and AI workspace"
+default-run = "meetingpal"
+
+[lib]
+name = "meetingpal_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart", "stream"] }
+futures-util = "0.3"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+hound = "3.5"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+flexaudio = "=0.8.1"
+fs2 = "0.4"
+lopdf = "0.36"
+ttf-parser = "0.25"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6", features = ["windows-native"] }
+scap = { path = "../third-party/scap-0.1.0-beta.1" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", features = ["apple-native"] }
+scap = { path = "../third-party/scap-0.1.0-beta.1" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust"] }
+xcap = "0.9"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1

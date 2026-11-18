@@ -1,0 +1,55 @@
+name: Manual test packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            bundles: nsis
+          - os: macos-15
+            name: macos-arm64
+            bundles: app,dmg
+          - os: macos-15-intel
+            name: macos-x64
+            bundles: app,dmg
+          - os: ubuntu-24.04
+            name: linux-x64
+            bundles: deb,appimage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      CARGO_BUILD_JOBS: 3
+      MACOSX_DEPLOYMENT_TARGET: '14.2'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca
+      - uses: Swatinem/rust-cache@e9d7b9f1e587218970671bac74e5511ed9506e6a
+        with:
+          workspaces: src-tauri
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libpipewire-0.3-dev libspa-0.2-dev libdbus-1-dev libxcb-randr0-dev libwayland-dev libclang-dev libxdo-dev libsecret-1-dev clang cmake
+      - name: macOS codec tools
+        if: runner.os == 'macOS'
+        run: brew install nasm pkg-config
+      - run: npm ci
+      - run: npm run runtimes:build
+      - run: npm run check
+      - run: npm run desktop:build -- --bundles ${{ matrix.bundles }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: meetingpal-${{ matrix.name }}-unsigned-test
+          path: src-tauri/target/release/bundle/
+          retention-days: 7

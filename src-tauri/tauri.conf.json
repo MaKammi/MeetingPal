@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MeetingPal",
+  "version": "0.1.0",
+  "identifier": "de.meetingpal.desktop",
+  "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
+  "app": {
+    "windows": [{ "label": "main", "title": "MeetingPal", "width": 1320, "height": 900, "minWidth": 960, "minHeight": 640 }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost blob:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'",
+      "assetProtocol": { "enable": true, "scope": ["$APPDATA/meetings/**", "$APPLOCALDATA/meetings/**"] }
+    }
+  },
+  "bundle": {
+    "active": true, "targets": "all", "category": "Productivity",
+    "shortDescription": "Private meeting recording and AI notes",
+    "resources": ["binaries/"],
+    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
+    "macOS": { "minimumSystemVersion": "14.2", "infoPlist": "Info.plist" },
+    "linux": { "deb": { "depends": ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1", "libasound2t64", "libpipewire-0.3-0", "libdbus-1-3"] } }
+  }
+}
