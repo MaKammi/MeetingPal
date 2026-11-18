@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "MeetingPal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "de.meetingpal.desktop",
   "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build && node scripts/build-notices.mjs", "frontendDist": "../dist" },
   "app": {
@@ -9,6 +9,14 @@
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost blob:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'",
       "assetProtocol": { "enable": true, "scope": ["$APPDATA/meetings/**", "$APPLOCALDATA/meetings/**"] }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/MaKammi/MeetingPal/releases/latest/download/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4RDQ5MjdFNkJBOTlFNUMKUldSY25xbHJmcExVU0lRZGNEcHc5M2p2Mi9qUVIzZFFEdzZrQzRPRmdNMnNLVW1tSzY1WXJXYWUK",
+      "requireSignedVersion": true,
+      "windows": { "installMode": "passive" }
     }
   },
   "bundle": {

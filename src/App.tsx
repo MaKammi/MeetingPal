@@ -39,6 +39,8 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import { api, desktop } from "./api";
+import { useUpdates, updateError } from "./useUpdates";
+import { version as appVersion } from "../package.json";
 import { bytes, defaultConfig, disclosure, duration } from "./types";
 import type {
   Bootstrap,
@@ -67,6 +69,7 @@ const providerNames: Record<Provider, string> = {
 };
 function App() {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
+  const updates = useUpdates(boot?.settings, !!boot?.activeMeeting);
   const [page, setPage] = useState<
     "library" | "models" | "settings" | "meeting"
   >("library");
@@ -311,7 +314,7 @@ function App() {
           </div>
           <div className="version">
             <span className="online-dot" />
-            MeetingPal <span>v0.1.0 · Preview</span>
+            MeetingPal <span>v{appVersion}</span>
           </div>
         </div>
       </aside>
@@ -340,6 +343,13 @@ function App() {
             </button>
           </div>
         </header>
+        {updates.version && page !== "settings" && (
+          <div className="preview-banner" role="status">
+            <Download size={16} />
+            <span>{t(`MeetingPal ${updates.version} ist verfügbar.`, `MeetingPal ${updates.version} is available.`)}</span>
+            <button className="secondary" onClick={() => setPage("settings")}>{t("Update ansehen", "View update")}</button>
+          </div>
+        )}
         {!desktop && (
           <div className="preview-banner">
             <Monitor size={15} />
@@ -564,6 +574,7 @@ function App() {
           )}
           {page === "settings" && (
             <SettingsPage
+              updates={updates}
               boot={boot}
               t={t}
               act={act}
@@ -1582,12 +1593,14 @@ function ModelsPage({
 
 function SettingsPage({
   boot,
+  updates,
   t,
   act,
   onSaved,
   notify,
 }: {
   boot: Bootstrap;
+  updates: ReturnType<typeof useUpdates>;
   t: Translate;
   act: (f: () => Promise<unknown>) => Promise<void>;
   onSaved: () => Promise<void>;
@@ -1597,6 +1610,18 @@ function SettingsPage({
     structuredClone(boot.settings),
   );
   const [keys, setKeys] = useState<Record<string, string>>({});
+  const updateBusy = updates.status === "checking" || updates.status === "installing";
+  let updateMessage = "";
+  if (boot.activeMeeting) {
+    updateMessage = t("Updates sind nach der Aufnahme verfügbar.", "Updates are available after recording.");
+  } else if (updates.status === "checking") {
+    updateMessage = t("Suche nach Updates …", "Checking for updates…");
+  } else if (updates.status === "current") {
+    updateMessage = t(`Version ${appVersion} ist aktuell.`, `Version ${appVersion} is up to date.`);
+  } else if (updates.status === "installing") {
+    updateMessage = t("Update wird installiert …", "Installing update…");
+    if (updates.percent !== null) updateMessage += ` ${updates.percent} %`;
+  }
   return (
     <>
       <div className="page-heading">
@@ -1738,9 +1763,27 @@ function SettingsPage({
               )}
             </p>
           )}
-          <h3>
-            {t("Standards für neue Meetings", "Defaults for new meetings")}
-          </h3>
+          <h3>{t("Programmupdates", "App updates")}</h3>
+          <label className="field-label">
+            {t("Automatisch nach Updates suchen", "Automatically check for updates")}
+            <select value={settings.updateChecks} onChange={(event) => setSettings({ ...settings, updateChecks: event.target.value as Settings["updateChecks"] })}>
+              <option value="onlineOnly">{t("Bei Online-Profilen", "With online profiles")}</option>
+              <option value="always">{t("Auch bei lokaler KI", "Also when using local AI")}</option>
+              <option value="manual">{t("Nur manuell", "Manual only")}</option>
+            </select>
+          </label>
+          <p className="muted">{t("Die Suche verbindet sich mit GitHub. Du bestimmst, wann ein Update installiert und die App neu gestartet wird.", "Checks connect to GitHub. You choose when to install an update and restart the app.")}</p>
+          <div className="field-row">
+            <button className="secondary" disabled={!desktop || !!boot.activeMeeting || updateBusy} onClick={() => void updates.check()}>
+              <RefreshCw size={15} />{t("Jetzt nach Updates suchen", "Check for updates now")}
+            </button>
+            {updates.version && <button className="primary" disabled={!!boot.activeMeeting || updateBusy} onClick={() => void updates.install()}>
+              <Download size={15} />{t(`Version ${updates.version} installieren und neu starten`, `Install ${updates.version} and restart`)}
+            </button>}
+          </div>
+          {updateMessage && <p className="muted" role="status">{updateMessage}</p>}
+          {updates.error && <p className="warning-box" role="alert">{updateError(updates.error, t)}</p>}
+          <h3>{t("Standards für neue Meetings", "Defaults for new meetings")}</h3>
           <label className="checkbox-row">
             <input
               type="checkbox"

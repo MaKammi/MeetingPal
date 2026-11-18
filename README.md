@@ -2,7 +2,7 @@
 
 Desktop-App für lokale Meeting-Aufnahmen und KI-gestützte Protokolle. MeetingPals eigener Quellcode steht unter der [GNU Affero General Public License, Version 3 (AGPL-3.0-only)](LICENSE). Für Beiträge gilt das [Contributor License Agreement](CONTRIBUTING.md).
 
-**Status: 0.1.0 – Entwicklungsversion.** Die Anwendung enthält native Aufnahme, Verarbeitung und eine bedienbare Oberfläche. Die Freigabe als verlässliches Aufnahmeprodukt setzt die noch offenen Hardware- und Langzeittests in [TESTING.md](docs/TESTING.md) voraus. Insbesondere die Zielwerte von 100 ms Synchronität und maximal fünf Sekunden Verlust sind noch keine nachgewiesenen Garantien.
+**[MeetingPal für Windows, macOS und Linux herunterladen](https://github.com/MaKammi/MeetingPal/releases/latest)**. Die erste öffentliche Version enthält native Aufnahme und KI-Auswertung. Die Abnahme auf echten Geräten läuft noch. Dazu gehören die Messungen zur Synchronität und zur Wiederherstellung nach einem Abbruch. [Abnahmestand](docs/TESTING.md)
 
 ## Funktionsumfang
 
@@ -53,7 +53,11 @@ Bibliothek und Modelle liegen im App-Datenverzeichnis `de.meetingpal.desktop`; d
 
 Entwicklungsziele: Windows 11 x64; macOS ab 14.2 auf Intel/Apple Silicon; Ubuntu 24.04 x64 mit GNOME auf Wayland/X11. Unter Wayland entscheidet die Systemfreigabe über Bildschirm/Fenster. Auf macOS benötigt auch Desktop-Ton die ScreenCaptureKit-Freigabe; Systemton umfasst alle Apps.
 
-[Desktop checks](.github/workflows/ci.yml) baut und prüft alle vier Architekturziele bei Push/PR. [Manual test packages](.github/workflows/packages.yml) erstellt auf manuellen Start Installer inklusive Laufzeiten als kurzzeitig gespeicherte private Actions-Artefakte. Es erfolgt keine automatische Veröffentlichung. Signierung/Notarisierung sind noch nicht eingerichtet; siehe [Release-Prüfung](docs/TESTING.md).
+Windows verwendet den x64-Installer, macOS eine `.dmg` für Apple Silicon (`aarch64`) oder Intel (`x64`), Ubuntu ein `.deb` oder eine `.AppImage`. Nutzer von 0.1.0 installieren die öffentliche Version einmal manuell. Die lokale Bibliothek wird weiterverwendet.
+
+Ab 0.1.1 prüft die App beim Start und bei längerem Betrieb täglich auf Updates, wenn das Standardprofil Onlinezugriff erlaubt. Unter **Einstellungen → Programmupdates** lässt sich die Suche auch bei lokaler KI erlauben oder auf manuell stellen. **Jetzt nach Updates suchen** verbindet sich ausdrücklich mit GitHub. Nach Bestätigung lädt die App das passende signierte Paket und startet neu. Während einer Aufnahme oder laufenden Verarbeitung lässt sich kein Update installieren.
+
+Gewöhnliche Pushes und Pull Requests verwenden einen Linux-Runner. Ein Versionstag baut und testet alle vier Plattformziele, prüft die Signaturen und veröffentlicht Installer und Updatefeed gemeinsam. Der vollständige Plattformtest lässt sich auch manuell starten. Die Pakete haben eine Updatersignatur. Windows-Herausgebersignatur und macOS-Notarisierung stehen aus. [Releaseablauf](docs/DEVELOPMENT.md#veröffentlichung)
 
 ## Dokumentation
 

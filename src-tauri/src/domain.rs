@@ -411,6 +411,27 @@ pub struct Settings {
     pub locale: String,
     pub default_config: MeetingConfig,
     pub retention_days: Option<u32>,
+    #[serde(default)]
+    pub update_checks: UpdateChecks,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateChecks {
+    #[default]
+    OnlineOnly,
+    Always,
+    Manual,
+}
+
+impl UpdateChecks {
+    pub fn automatic(self, offline: bool) -> bool {
+        match self {
+            Self::OnlineOnly => !offline,
+            Self::Always => true,
+            Self::Manual => false,
+        }
+    }
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -418,6 +439,7 @@ impl Default for Settings {
             locale: "de".into(),
             default_config: MeetingConfig::default(),
             retention_days: None,
+            update_checks: UpdateChecks::default(),
         }
     }
 }

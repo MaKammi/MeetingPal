@@ -29,6 +29,7 @@ export interface Settings {
   locale: string;
   defaultConfig: MeetingConfig;
   retentionDays: number | null;
+  updateChecks: "onlineOnly" | "always" | "manual";
 }
 export interface EvidenceItem {
   text: string;

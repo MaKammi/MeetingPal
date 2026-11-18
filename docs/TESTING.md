@@ -39,8 +39,9 @@ Zielgeräte: Windows 11 x64; macOS 14.2+ Intel und Apple Silicon; Ubuntu 24.04 G
 - FFmpeg-/Codec-Konfiguration sowie sämtliche Lizenz- und korrespondierenden Quellmaterialien prüfen.
 - Modelldateien bleiben getrennte, ausdrückliche Downloads; Lizenzdarstellung prüfen.
 - Abnahmematrix mit Messwerten ausfüllen; keine ungeprüften Zielwerte als Garantien veröffentlichen.
-- Testpakete sind private Actions-Artefakte, keine öffentliche Veröffentlichung oder automatische Updates.
-- Der manuell gestartete Paketlauf prüft die Medienpipeline mit den tatsächlich gebündelten Codecs im Release-Profil. Downloads enthalten die Installer und `build-info.json` mit Commit, Größe und SHA-256; sie bleiben sieben Tage in GitHub Actions verfügbar. Temporäre Quell-/Debug- und Paketverzeichnisse werden auf den CI-Runnern vor dem Speichern der Caches entfernt.
+- Der Paketlauf prüft die Medienpipeline mit den tatsächlich gebündelten Codecs im Release-Profil auf vier Zielen. Manuelle Testpakete bleiben zwei Tage als Actions-Artefakte verfügbar.
+- Bei einem Versionstag prüft der Releasejob die Manifestdaten jeder Plattform, verifiziert die Updatepakete mit dem öffentlichen Schlüssel und überprüft die SHA-256-Werte im GitHub-Entwurf. Nutzer erreichen die Installer und den Updatefeed über das öffentliche Release.
+- Nach der Veröffentlichung prüft `cargo test --manifest-path src-tauri/Cargo.toml --test published_update -- --ignored --nocapture` den anonymen öffentlichen Feed mit dem echten Tauri-Updater. Eine simulierte ältere Version lädt das signierte Plattformpaket herunter, die aktuelle Version meldet keinen Updatebedarf. Der Test führt keinen Installer aus.
 
 ## Lokal nachgewiesen (18. November 2026)
 

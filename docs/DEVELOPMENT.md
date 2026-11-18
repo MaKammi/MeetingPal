@@ -38,4 +38,13 @@ Ein neuer Adapter muss Aufgaben-/Eingabefähigkeiten melden, Offline- und Budget
 
 Linux-Pakete siehe `.github/workflows/ci.yml`. Auf Wayland ist eine aktive Portal-/PipeWire-Sitzung notwendig; Headless-CI ersetzt keinen Aufnahmeversuch. Auf macOS sind Mikrofon- und Bildschirmfreigabe nötig. Nicht signierte Testbuilds sind nicht für reguläre öffentliche Verteilung vorgesehen.
 
-Echte Provider-Tests sind opt-in und benötigen eigene Schlüssel. Schlüssel, Meeting-Inhalte, Exporte, Modelldateien und Debug-Logs nicht in Issues oder Commits aufnehmen. Es ist kein Auto-Update- oder Telemetrie-Dienst eingebaut.
+Echte Provider-Tests sind opt-in und benötigen eigene Schlüssel. Schlüssel, Meeting-Inhalte, Exporte, Modelldateien und Debug-Logs gehören in die lokale Entwicklungsumgebung.
+
+## Veröffentlichung
+
+1. Version in npm, beiden Lockfiles, `src-tauri/Cargo.toml` und `src-tauri/tauri.conf.json` anheben. Änderungen für Nutzer unter `docs/releases/<Version>.md` beschreiben.
+2. Den geprüften Commit auf `main` mit einem stabilen Tag wie `v0.1.1` markieren und den Tag pushen. Ein manueller Start der Paketpipeline erzeugt ausschließlich Testpakete.
+3. Die Paketpipeline baut Windows NSIS, beide macOS-DMGs samt `.app.tar.gz`, Ubuntu Deb und AppImage. Der Releasejob prüft Commit und SHA-256 jeder Datei. Die GitHub-Umgebung `release-signing` erlaubt Versionstags und enthält `TAURI_SIGNING_PRIVATE_KEY` sowie `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Der öffentliche Schlüssel steht in der Tauri-Konfiguration. Der private Schlüssel gehört in die gesicherte Ablage des Projektinhabers. Bestehende Installationen vertrauen nur ihrem eingebauten Schlüssel.
+4. Der Releasejob bindet die Versionsnummer an die Tauri-Signatur, verifiziert sie mit Minisign und vergleicht die hochgeladenen Dateien mit GitHubs SHA-256-Werten. Nach vollständigem Upload wird das Release mit `latest.json` öffentlich sichtbar. Fertig veröffentlichte Versionen erhalten bei Korrekturen eine neue Versionsnummer.
+
+Der Updater bezieht seinen Feed unter `https://github.com/MaKammi/MeetingPal/releases/latest/download/latest.json`. Installationsformat und CPU-Architektur bestimmen das Paket. Ein Debian-Update kann vom Betriebssystem eine Bestätigung mit erhöhten Rechten anfordern.

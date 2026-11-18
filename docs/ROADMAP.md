@@ -2,9 +2,9 @@
 
 ## 1. Repository und Grundgerüst
 
-- [x] Privates Repository, `main`, Tauri 2 + React/TypeScript + Rust.
+- [x] Öffentliches Repository mit AGPL-3.0-only, `main`, Tauri 2 + React/TypeScript + Rust.
 - [x] SQLite, lokale Dateien, Schlüsselverwaltung, Provider-Grenzen.
-- [x] Automatische Prüfungen für Windows, Intel-/ARM-macOS und Linux; manuell gestartete Paket-Builds.
+- [x] Automatische Linux-Prüfung bei Änderungen, Paket- und Medienprüfungen für alle vier Ziele beim Release.
 
 ## 2. Aufnahme
 
@@ -35,4 +35,6 @@
 - [ ] Signierte Windows-/macOS-Pakete, Notarisierung und vollständige Distributions-/Lizenzabnahme.
 - [ ] Accessibility- und vollständiger Sprachreview; weitere Komfortfunktionen.
 
-Team-Synchronisierung, Kalender, automatische Veröffentlichung und automatische Updates sind bewusst spätere Produktphasen.
+- [x] Öffentliche Releases, signierte Programmupdates und manueller oder automatischer Updatecheck mit Offline-Einstellung.
+
+Team-Synchronisierung und Kalenderintegration sind spätere Produktphasen.

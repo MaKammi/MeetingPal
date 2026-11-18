@@ -12,6 +12,7 @@ pub mod models;
 pub mod providers;
 pub mod secrets;
 pub mod storage;
+pub mod updates;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 pub struct ActiveRecording {
@@ -26,6 +27,7 @@ pub struct AppState {
     pub runtimes: media::Runtimes,
     pub ai: providers::Ai,
     pub recording: tokio::sync::Mutex<Option<ActiveRecording>>,
+    pub updates: updates::Updates,
 }
 pub fn entry() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -42,6 +44,7 @@ pub fn entry() -> anyhow::Result<()> {
         return result;
     }
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -69,6 +72,7 @@ pub fn entry() -> anyhow::Result<()> {
                 runtimes: media::Runtimes { directory },
                 ai: providers::Ai::new()?,
                 recording: tokio::sync::Mutex::new(None),
+                updates: updates::Updates::default(),
             });
             if let Some(days) = state.store.settings().retention_days {
                 let threshold = chrono::Utc::now() - chrono::Duration::days(days as i64);
@@ -111,6 +115,8 @@ pub fn entry() -> anyhow::Result<()> {
         })
         .invoke_handler(tauri::generate_handler![
             commands::bootstrap,
+            updates::check_for_update,
+            updates::install_update,
             commands::list_meetings,
             commands::get_meeting,
             commands::get_jobs,

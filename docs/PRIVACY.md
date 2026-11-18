@@ -4,6 +4,8 @@ Meetings, Transkripte und Modelle liegen als normale Dateien im persönlichen Ap
 
 Das lokale Profil verhindert Cloud-Verarbeitung im Backend, auch bei einem manipulierten oder veralteten UI-Zustand. Es gibt keinen Cloud-Fallback. Modellinstallation ist eine ausdrücklich ausgelöste Verbindung zu Hugging Face. Die installierten KI-Laufzeiten arbeiten lokal; die llama.cpp-Verbindung bleibt auf Loopback. Keine Telemetrie, keine Kalender- oder Team-Synchronisierung.
 
+Die automatische Prüfung auf Programmupdates ist beim lokalen Standardprofil zunächst aus. Die Einstellung „Auch bei lokaler KI“ erlaubt eine Anfrage an den öffentlichen GitHub-Releasefeed. „Jetzt nach Updates suchen“ löst eine einzelne Anfrage aus. GitHub erhält dabei übliche Verbindungsdaten einschließlich der IP-Adresse. Der Abruf verwendet keine Meeting-Inhalte, API-Schlüssel oder Kontokennung.
+
 Bei Cloud-Profilen werden die im Aufnahme-Dialog genannten Daten übertragen:
 
 - Transkription: abgeleiteter Audiomix an OpenAI.

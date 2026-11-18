@@ -27,6 +27,7 @@ async fn downloaded_models_transcribe_and_analyze_real_fixture() {
         secrets: Secrets::default(),
         ai: Ai::new().unwrap(),
         recording: tokio::sync::Mutex::new(None),
+        updates: Default::default(),
     });
     for id in ["whisper-small", "qwen-text"] {
         state

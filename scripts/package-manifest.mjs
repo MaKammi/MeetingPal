@@ -13,7 +13,7 @@ async function installers(directory) {
     const file = path.join(directory, entry.name);
     // .app and AppDir are staging trees, already contained in the installers.
     if (entry.isDirectory() && !/\.(app|AppDir)$/.test(entry.name)) files.push(...await installers(file));
-    else if (entry.isFile() && /\.(exe|dmg|deb|AppImage)$/.test(entry.name)) files.push(file);
+    else if (entry.isFile() && (/\.(exe|dmg|deb|AppImage|app\.tar\.gz)$/.test(entry.name) || entry.name === 'appimage-notices.tar.gz')) files.push(file);
   }
   return files;
 }
@@ -25,5 +25,5 @@ for (const file of (await installers(output)).sort()) {
 }
 if (!files.length) throw new Error('No installers were produced.');
 const { version } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-await writeFile(path.join(output, 'build-info.json'), JSON.stringify({ version, revision, platform: process.platform, architecture: process.arch, signed: false, files }, null, 2) + '\n');
+await writeFile(path.join(output, 'build-info.json'), JSON.stringify({ version, revision, platform: process.platform, architecture: process.arch, files }, null, 2) + '\n');
 console.log(`Recorded ${files.length} installer(s) from ${revision}.`);

@@ -85,6 +85,7 @@ pub async fn download_model(
     app: tauri::AppHandle,
     id: String,
 ) -> Response<()> {
+    let _work = state.updates.working()?;
     state.models.download(id, &app).await.map_err(message)
 }
 #[tauri::command]
@@ -93,6 +94,7 @@ pub fn cancel_download(state: State<'_, Arc<AppState>>, id: String) {
 }
 #[tauri::command]
 pub async fn delete_model(state: State<'_, Arc<AppState>>, id: String) -> Response<()> {
+    let _work = state.updates.working()?;
     if state.recording.lock().await.is_some() {
         return Err("Stop recording before removing models".into());
     }
@@ -104,6 +106,7 @@ pub async fn delete_model(state: State<'_, Arc<AppState>>, id: String) -> Respon
 }
 #[tauri::command]
 pub async fn benchmark_model(state: State<'_, Arc<AppState>>, id: String) -> Response<Value> {
+    let _work = state.updates.working()?;
     let spec = state.models.spec(&id).map_err(message)?;
     if spec.task != "transcription" {
         return Err("The benchmark currently measures speech recognition.".into());
@@ -140,6 +143,7 @@ pub async fn start_recording(
     config: MeetingConfig,
     test: bool,
 ) -> Response<Meeting> {
+    let _work = state.updates.working()?;
     start_recording_inner(state.inner().clone(), app, config, test)
         .await
         .map_err(message)
@@ -423,6 +427,7 @@ pub async fn analyze_again(
     app: tauri::AppHandle,
     id: String,
 ) -> Response<Meeting> {
+    let _work = state.updates.working()?;
     let current = state.store.load(&id).map_err(message)?;
     let result = crate::providers::AnalysisProvider::analyze(&state.ai, &state, &current, false)
         .await
@@ -448,6 +453,7 @@ pub async fn ask_meeting(
     id: String,
     question: String,
 ) -> Response<Meeting> {
+    let _work = state.updates.working()?;
     let current = state.store.load(&id).map_err(message)?;
     let answer = state
         .ai
@@ -475,6 +481,7 @@ pub fn retry_processing(
     id: String,
     max_requests: u32,
 ) -> Response<()> {
+    let _work = state.updates.working()?;
     if max_requests == 0 || max_requests > 100000 {
         return Err("Invalid request budget".into());
     }
@@ -502,6 +509,7 @@ pub async fn import_media(
     path: String,
     config: MeetingConfig,
 ) -> Response<Meeting> {
+    let _work = state.updates.working()?;
     let meeting = crate::media::import(&state.store, &state.runtimes, &PathBuf::from(path), config)
         .await
         .map_err(message)?;
@@ -511,6 +519,7 @@ pub async fn import_media(
 }
 #[tauri::command]
 pub async fn make_playback(state: State<'_, Arc<AppState>>, id: String) -> Response<String> {
+    let _work = state.updates.working()?;
     crate::media::playback(&state.store, &state.runtimes, &id)
         .await
         .map_err(message)
@@ -538,6 +547,7 @@ pub async fn delete_meeting(
     id: String,
     media_only: bool,
 ) -> Response<()> {
+    let _work = state.updates.working()?;
     if state
         .recording
         .lock()
@@ -570,6 +580,7 @@ pub fn export_meeting(
     path: String,
     format: String,
 ) -> Response<()> {
+    let _work = state.updates.working()?;
     let path = PathBuf::from(path);
     if !path.is_absolute() {
         return Err("Choose an absolute export path".into());

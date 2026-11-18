@@ -14,6 +14,7 @@ export async function api<T>(
         locale: "de",
         defaultConfig: defaultConfig(),
         retentionDays: null,
+        updateChecks: "onlineOnly",
       },
       meetings: [],
       models: catalog.map((m) => ({ ...m, installed: false })),

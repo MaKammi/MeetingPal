@@ -1,8 +1,13 @@
-name: Manual test packages
+name: Desktop packages and releases
 on:
   workflow_dispatch:
+  push:
+    tags: ['v*']
 permissions:
   contents: read
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   windows-codecs:
     runs-on: ubuntu-24.04
@@ -12,6 +17,9 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '24'
+      - name: Verify release tag matches application version
+        if: github.ref_type == 'tag'
+        run: node scripts/release.mjs check-tag
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         id: codecs
         with:
@@ -25,7 +33,7 @@ jobs:
         with:
           name: windows-source-codecs
           path: src-tauri/binaries/
-          retention-days: 7
+          retention-days: 1
   package:
     needs: windows-codecs
     strategy:
@@ -84,22 +92,62 @@ jobs:
         if: runner.os != 'Windows' && steps.runtimes.outputs.cache-hit != 'true'
       - name: Free temporary runtime and debug build space
         run: node scripts/clean-package-runner.mjs before-build
-      - name: Media pipeline with bundled codecs
-        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --release --test pipeline -- --ignored
-      - run: npm run check
+      - name: Native tests and media pipeline with bundled codecs
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --release --lib --test pipeline -- --include-ignored
+      - run: npm test
       - run: npm run desktop:build -- --bundles ${{ matrix.bundles }}
+      - name: Archive macOS application for the updater
+        if: runner.os == 'macOS'
+        working-directory: src-tauri/target/release/bundle/macos
+        run: COPYFILE_DISABLE=1 tar -czf "MeetingPal.app.tar.gz" MeetingPal.app
+      - name: Collect bundled Linux library notices and source references
+        if: runner.os == 'Linux'
+        run: python3 scripts/appimage-notices.py
       - name: Record installer checksums and source revision
         run: node scripts/package-manifest.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: meetingpal-${{ matrix.name }}-unsigned-test
+          name: meetingpal-${{ matrix.name }}
           path: |
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.dmg
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/release/bundle/appimage-notices.tar.gz
             src-tauri/target/release/bundle/build-info.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 2
       - name: Free uploaded package staging before saving caches
         run: node scripts/clean-package-runner.mjs after-upload
+  publish:
+    if: github.event_name == 'push' && github.ref_type == 'tag' && github.repository == 'MaKammi/MeetingPal'
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: release-signing
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: sudo apt-get update && sudo apt-get install -y minisign
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          pattern: meetingpal-*
+          path: runtime-data/release-input
+      - name: Sign versioned updates and verify every package
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/release.mjs prepare
+      - name: Publish verified assets and update feed together
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs publish
