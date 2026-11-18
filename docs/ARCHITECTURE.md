@@ -1,5 +1,7 @@
 # Architektur
 
+Die Bibliothek besitzt eine prozessübergreifende Dateisperre. Eine zweite App-Instanz kann dieselbe Bibliothek nicht gleichzeitig öffnen und laufende Aufträge irrtümlich als Wiederherstellungsfälle übernehmen. Medienlöschung entfernt auch importierte Originalformate; Transkript, Notizen und Auswertung bleiben bei dieser Option erhalten.
+
 ```mermaid
 flowchart LR
     UI[React / TypeScript] -->|Tauri IPC| Core[Rust / lokale Bibliothek]

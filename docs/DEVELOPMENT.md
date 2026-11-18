@@ -30,7 +30,7 @@ Die Standardbuilds verwenden CPU-Verarbeitung auf Windows/Linux und Metal-Unters
 
 Die Modell-ID wird vom Nutzer ausgewählt oder aus dem authentifizierten Modellkatalog des Anbieters übernommen. Es gibt keinen unsichtbaren Anbieterwechsel. Geheimnisse werden nur im Rust-Prozess verarbeitet; die Oberfläche erhält ausschließlich den Status „vorhanden“ und speichert keine Schlüssel in Einstellungen.
 
-Provider-Antworten sind Daten. Keine Tools, Funktionsaufrufe, Shell-Kommandos oder externen Aktionen aus Meeting-Inhalten. Systemanweisungen verlangen quellenbasierte JSON-Ausgaben; alle Belege müssen im Meeting existieren. Die App kann die inhaltliche Richtigkeit einer gültigen Quellenreferenz nicht automatisch garantieren.
+Provider-Antworten sind Daten. Keine Tools, Funktionsaufrufe, Shell-Kommandos oder externen Aktionen aus Meeting-Inhalten. Systemanweisungen verlangen quellenbasierte JSON-Ausgaben; alle Belege müssen im Meeting existieren. Lokale Ausgaben werden zusätzlich mit JSON-Grammatiken und einer Liste zulässiger Quellen-IDs eingeschränkt. Antworten ohne Beleg werden als nicht beantwortbar angezeigt. Fehlende Ergebnisabschnitte gelten als Fehler statt als erfolgreiches leeres Protokoll. Die App kann die inhaltliche Richtigkeit einer gültigen Quellenreferenz nicht automatisch garantieren.
 
 Ein neuer Adapter muss Aufgaben-/Eingabefähigkeiten melden, Offline- und Budgetprüfung verwenden, Timeouts behandeln und Ergebnisse in die internen Schemas abbilden. Modellfähigkeiten unterscheiden sich innerhalb eines Anbieters; unbekannte Modellkombinationen dürfen nicht als bereits getestet dargestellt werden.
 

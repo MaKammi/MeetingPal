@@ -59,20 +59,37 @@ fn source_label(meeting: &Meeting, id: &str) -> String {
     }
 }
 fn report(meeting: &Meeting, links: bool) -> String {
+    let de = meeting.config.language == "de";
+    let created = chrono::DateTime::parse_from_rfc3339(&meeting.created_at)
+        .map(|date| date.format("%Y-%m-%d %H:%M %:z").to_string())
+        .unwrap_or_else(|_| meeting.created_at.clone());
     let mut out = format!(
         "# {}\n\n{} · {}\n\n",
         meeting.config.title,
-        meeting.created_at,
+        created,
         timestamp(meeting.duration_ms, '.')
     );
     if let Some(a) = &meeting.analysis {
         for (title, items) in [
-            ("Summary", &a.summary),
-            ("Topics", &a.topics),
-            ("Decisions", &a.decisions),
-            ("Tasks", &a.tasks),
-            ("Open questions", &a.questions),
+            (if de { "Zusammenfassung" } else { "Summary" }, &a.summary),
+            (if de { "Themen" } else { "Topics" }, &a.topics),
+            (
+                if de { "Entscheidungen" } else { "Decisions" },
+                &a.decisions,
+            ),
+            (if de { "Aufgaben" } else { "Tasks" }, &a.tasks),
+            (
+                if de {
+                    "Offene Fragen"
+                } else {
+                    "Open questions"
+                },
+                &a.questions,
+            ),
         ] {
+            if items.is_empty() {
+                continue;
+            }
             out.push_str(&format!("## {title}\n\n"));
             for item in items {
                 out.push_str(&format!(
@@ -104,8 +121,10 @@ fn report(meeting: &Meeting, links: bool) -> String {
         }
     }
     out.push_str(&format!(
-        "## Notes\n\n{}\n\n## Transcript\n\n",
-        meeting.notes
+        "## {}\n\n{}\n\n## {}\n\n",
+        if de { "Notizen" } else { "Notes" },
+        meeting.notes,
+        if de { "Transkript" } else { "Transcript" }
     ));
     for s in &meeting.transcript {
         if links {
@@ -120,7 +139,11 @@ fn report(meeting: &Meeting, links: bool) -> String {
         ));
     }
     if !meeting.visuals.is_empty() {
-        out.push_str("## Visual evidence\n\n");
+        out.push_str(if de {
+            "## Videobelege\n\n"
+        } else {
+            "## Visual evidence\n\n"
+        });
         for v in &meeting.visuals {
             if links {
                 out.push_str(&format!("<a id=\"{}\"></a>\n\n", anchor(&v.id)));
@@ -134,7 +157,11 @@ fn report(meeting: &Meeting, links: bool) -> String {
         }
     }
     if !meeting.markers.is_empty() {
-        out.push_str("## Bookmarks\n\n");
+        out.push_str(if de {
+            "## Zeitmarken\n\n"
+        } else {
+            "## Bookmarks\n\n"
+        });
         for marker in &meeting.markers {
             out.push_str(&format!(
                 "- {} — {}\n",
@@ -162,7 +189,17 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
     let text = report(meeting, false);
     let mut chars = BTreeMap::<u16, char>::new();
     let mut lines = vec![];
-    for original in text.lines().map(|s| s.trim_start_matches('#').trim()) {
+    for raw in text.lines() {
+        let size = if raw.starts_with("# ") {
+            17.0
+        } else if raw.starts_with("## ") {
+            12.0
+        } else if raw.starts_with("### ") {
+            10.5
+        } else {
+            10.0
+        };
+        let original = raw.trim_start_matches('#').trim();
         let mut line = String::new();
         let mut width = 0.0f32;
         for word in original.split_whitespace() {
@@ -173,13 +210,13 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
                         .and_then(|g| face.glyph_hor_advance(g))
                         .unwrap_or(500) as f32
                         / face.units_per_em() as f32
-                        * 10.0
+                        * size
                 })
                 .sum::<f32>()
                 + 3.0;
             if w > 490.0 {
                 if !line.is_empty() {
-                    lines.push(line);
+                    lines.push((line, size));
                     line = String::new();
                     width = 0.0;
                 }
@@ -189,9 +226,9 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
                         .and_then(|g| face.glyph_hor_advance(g))
                         .unwrap_or(500) as f32
                         / face.units_per_em() as f32
-                        * 10.0;
+                        * size;
                     if width + advance > 490.0 && !line.is_empty() {
-                        lines.push(line);
+                        lines.push((line, size));
                         line = String::new();
                         width = 0.0;
                     }
@@ -201,7 +238,7 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
                 continue;
             }
             if width + w > 490.0 && !line.is_empty() {
-                lines.push(line);
+                lines.push((line, size));
                 line = String::new();
                 width = 0.0;
             }
@@ -211,14 +248,34 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
             line.push_str(word);
             width += w;
         }
-        lines.push(line);
+        lines.push((line, size));
     }
-    for line in &lines {
+    for (line, _) in &lines {
         for c in line.chars() {
             if let Some(g) = face.glyph_index(c) {
                 chars.entry(g.0).or_insert(c);
             }
         }
+    }
+    for c in "MeetingPal | 0123456789/".chars() {
+        if let Some(g) = face.glyph_index(c) {
+            chars.entry(g.0).or_insert(c);
+        }
+    }
+    let mut paginated = vec![Vec::<(String, f32)>::new()];
+    let mut used = 0.0f32;
+    for (line, size) in lines {
+        let height = if line.is_empty() { 7.0 } else { size + 5.0 };
+        let keep = if size > 10.0 { 70.0 } else { 0.0 };
+        if used + height + keep > 730.0 && !paginated.last().unwrap().is_empty() {
+            paginated.push(vec![]);
+            used = 0.0;
+        }
+        if used == 0.0 && line.is_empty() {
+            continue;
+        }
+        used += height;
+        paginated.last_mut().unwrap().push((line, size));
     }
     let mut doc = Document::with_version("1.7");
     let pages = doc.new_object_id();
@@ -259,14 +316,19 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
     let unicode = doc.add_object(Stream::new(dictionary! {}, cmap.into_bytes()));
     let font=doc.add_object(dictionary!{"Type"=>"Font","Subtype"=>"Type0","BaseFont"=>"NotoSans","Encoding"=>"Identity-H","DescendantFonts"=>vec![Object::Reference(cid)],"ToUnicode"=>unicode});
     let mut kids = vec![];
-    for (page_index, chunk) in lines.chunks(48).enumerate() {
-        let mut operations = vec![
-            Operation::new("BT", vec![]),
-            Operation::new("Tf", vec![Object::Name(b"F1".to_vec()), 10.into()]),
-            Operation::new("Td", vec![50.into(), 790.into()]),
-            Operation::new("TL", vec![15.into()]),
-        ];
-        for line in chunk {
+    let page_count = paginated.len();
+    for (page_index, chunk) in paginated.iter().enumerate() {
+        let mut operations = vec![Operation::new("BT", vec![])];
+        let mut y = 790.0f32;
+        for (line, size) in chunk {
+            operations.push(Operation::new(
+                "Tf",
+                vec![Object::Name(b"F1".to_vec()), (*size).into()],
+            ));
+            operations.push(Operation::new(
+                "Tm",
+                vec![1.into(), 0.into(), 0.into(), 1.into(), 50.into(), y.into()],
+            ));
             let glyphs: Vec<u8> = line
                 .chars()
                 .flat_map(|c| {
@@ -280,8 +342,30 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
                 "Tj",
                 vec![Object::String(glyphs, lopdf::StringFormat::Hexadecimal)],
             ));
-            operations.push(Operation::new("T*", vec![]));
+            y -= if line.is_empty() { 7.0 } else { size + 5.0 };
         }
+        let footer = format!("MeetingPal | {} / {page_count}", page_index + 1);
+        let glyphs: Vec<u8> = footer
+            .chars()
+            .flat_map(|c| {
+                face.glyph_index(c)
+                    .unwrap_or(ttf_parser::GlyphId(0))
+                    .0
+                    .to_be_bytes()
+            })
+            .collect();
+        operations.push(Operation::new(
+            "Tf",
+            vec![Object::Name(b"F1".to_vec()), 8.into()],
+        ));
+        operations.push(Operation::new(
+            "Tm",
+            vec![1.into(), 0.into(), 0.into(), 1.into(), 50.into(), 35.into()],
+        ));
+        operations.push(Operation::new(
+            "Tj",
+            vec![Object::String(glyphs, lopdf::StringFormat::Hexadecimal)],
+        ));
         operations.push(Operation::new("ET", vec![]));
         let content = doc.add_object(Stream::new(
             dictionary! {},
@@ -289,7 +373,6 @@ fn pdf(meeting: &Meeting, path: &Path) -> Result<()> {
         ));
         let page=doc.add_object(dictionary!{"Type"=>"Page","Parent"=>pages,"MediaBox"=>vec![0.into(),0.into(),595.into(),842.into()],"Resources"=>dictionary!{"Font"=>dictionary!{"F1"=>font}},"Contents"=>content,"Tabs"=>"S"});
         kids.push(Object::Reference(page));
-        let _ = page_index;
     }
     let count = kids.len() as i64;
     doc.objects.insert(

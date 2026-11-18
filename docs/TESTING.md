@@ -45,7 +45,8 @@ Zielgeräte: Windows 11 x64; macOS 14.2+ Intel und Apple Silicon; Ubuntu 24.04 G
 
 - Windows: Frontend-Build, Unit-Tests und Browser-Interaktion erfolgreich.
 - Windows: kompletter synthetischer Videoimport → Wiedergabe → Frame-Auswahl → PDF/Markdown/JSON/SRT/VTT erfolgreich.
-- Windows: echte Whisper-Small-Transkription des öffentlichen Benchmark-Audios, lokale Qwen3-Auswertung mit Quellenprüfung und Meeting-Frage erfolgreich; null Cloud-Anfragen.
+- Windows: echte Whisper-Small-Transkription des öffentlichen Benchmark-Audios, abschließende Transkript-Nachbearbeitung, idempotente Wiederholung und Erhalt manueller Korrekturen erfolgreich. Lokale Qwen3-Auswertung mit schemaerzwungenen Quellen und Meeting-Frage erfolgreich; null Cloud-Anfragen.
 - Windows: Desktop-App startet; alle vier gebündelten Laufzeiten werden als bereit erkannt.
+- PDF-Testexport mit Poppler gerendert und visuell geprüft; Umlaute auch nach Textextraktion korrekt, Überschriften, Quellen und Seitennummern lesbar. Die reproduzierbare Vorlage entsteht mit `cargo run --manifest-path src-tauri/Cargo.toml --example export_fixture` unter `test-results/exports`.
 
 Die opt-in Integrationstests stehen unter `src-tauri/tests`. `cargo test --manifest-path src-tauri/Cargo.toml --test pipeline -- --ignored` benötigt die gebündelten Codecs. `--test local_ai -- --ignored` lädt ausdrücklich etwa 3 GB öffentliche Modelle nach `runtime-data/test-models` und prüft die echte lokale KI. Diese Tests zeichnen weder Mikrofon noch Bildschirm auf.
