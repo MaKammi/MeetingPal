@@ -39,6 +39,7 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import { api, desktop } from "./api";
+import { VideoSourceField } from "./VideoSourcePicker";
 import { useUpdates, updateError } from "./useUpdates";
 import { version as appVersion } from "../package.json";
 import { bytes, defaultConfig, disclosure, duration } from "./types";
@@ -58,9 +59,9 @@ import type {
   Job,
   EvidenceItem,
   TranscriptSegment,
+  Translate,
 } from "./types";
 
-type Translate = (de: string, en: string) => string;
 const providerNames: Record<Provider, string> = {
   local: "Lokal",
   openai: "OpenAI",
@@ -1032,103 +1033,12 @@ function Setup({
                   </span>
                 </label>
                 {c.video.kind !== "none" && (
-                  <div className="nested-form">
-                    <select
-                      aria-label="Video source"
-                      value={
-                        c.video.id
-                          ? `${c.video.kind === "region" ? "screen" : c.video.kind}:${c.video.id}`
-                          : ""
-                      }
-                      onChange={(e) => {
-                        const split = e.target.value.indexOf(":");
-                        const kind = e.target.value.slice(0, split) as
-                          "screen" | "window" | "portal";
-                        patch({
-                          video: {
-                            kind,
-                            id: e.target.value.slice(split + 1),
-                            crop: null,
-                          },
-                        });
-                      }}
-                    >
-                      <option value="" disabled>
-                        {t("Quelle auswählen …", "Select source …")}
-                      </option>
-                      {sources.sources?.map((s) => (
-                        <option
-                          key={`${s.kind}:${s.id}`}
-                          value={`${s.kind}:${s.id}`}
-                        >
-                          {s.kind === "window" ? "▣ " : "▤ "}
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                    {sources.sourceError && (
-                      <small className="error-text">
-                        {sources.sourceError}
-                      </small>
-                    )}
-                    {["screen", "region", "portal"].includes(c.video.kind) && (
-                      <>
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={!!c.video.crop}
-                            onChange={(e) =>
-                              patch({
-                                video: {
-                                  ...c.video,
-                                  kind:
-                                    c.video.kind === "portal"
-                                      ? "portal"
-                                      : e.target.checked
-                                        ? "region"
-                                        : "screen",
-                                  crop: e.target.checked
-                                    ? { x: 0, y: 0, width: 1280, height: 720 }
-                                    : null,
-                                },
-                              })
-                            }
-                          />
-                          {t(
-                            "Auf einen Bereich begrenzen (Pixel der Quelle)",
-                            "Limit to a region (source pixels)",
-                          )}
-                        </label>
-                        {c.video.crop && (
-                          <div className="crop-fields">
-                            {(["x", "y", "width", "height"] as const).map(
-                              (key) => (
-                                <label key={key}>
-                                  {key}
-                                  <input
-                                    type="number"
-                                    min={key === "x" || key === "y" ? 0 : 16}
-                                    value={c.video.crop![key]}
-                                    onChange={(e) =>
-                                      patch({
-                                        video: {
-                                          ...c.video,
-                                          crop: {
-                                            ...c.video.crop!,
-                                            [key]: Number(e.target.value),
-                                          },
-                                        },
-                                      })
-                                    }
-                                  />
-                                </label>
-                              ),
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  <VideoSourceField
+                    value={c.video}
+                    sources={sources.sources ?? []}
+                    onChange={(video) => patch({ video })}
+                    t={t}
+                  />
                 )}
               </>
             )}

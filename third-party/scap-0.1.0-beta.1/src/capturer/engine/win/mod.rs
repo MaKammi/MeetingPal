@@ -115,17 +115,13 @@ impl GraphicsCaptureApiHandler for Capturer {
             }
             None => {
                 // get raw frame buffer
-                let mut frame_buffer = frame.buffer().unwrap();
-                let raw_frame_buffer = frame_buffer.as_raw_buffer();
-                let frame_data = raw_frame_buffer.to_vec();
-                let current_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Failed to get current time")
-                    .as_nanos() as u64;
+                let (width, height) = (frame.width() as i32, frame.height() as i32);
+                let mut frame_buffer = frame.buffer()?;
+                let frame_data = frame_buffer.as_nopadding_buffer()?.to_vec();
                 let bgr_frame = BGRAFrame {
                     display_time,
-                    width: frame.width() as i32,
-                    height: frame.height() as i32,
+                    width,
+                    height,
                     data: frame_data,
                 };
 
@@ -216,7 +212,7 @@ pub fn create_capturer(
             color_format,
             FlagStruct {
                 tx: tx.clone(),
-                crop: Some(get_crop_area(options)),
+                crop: options.crop_area.as_ref().map(|_| get_crop_area(options)),
             },
         )),
         Target::Window(window) => Settings::Window(WCSettings::new(
@@ -229,7 +225,7 @@ pub fn create_capturer(
             color_format,
             FlagStruct {
                 tx: tx.clone(),
-                crop: Some(get_crop_area(options)),
+                crop: options.crop_area.as_ref().map(|_| get_crop_area(options)),
             },
         )),
     };

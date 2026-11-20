@@ -4,6 +4,12 @@ export interface ModelSelection {
   provider: Provider;
   model: string;
 }
+export interface Crop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 export interface MeetingConfig {
   title: string;
   language: string;
@@ -14,7 +20,7 @@ export interface MeetingConfig {
   video: {
     kind: "none" | "screen" | "window" | "region" | "portal";
     id: string | null;
-    crop: { x: number; y: number; width: number; height: number } | null;
+    crop: Crop | null;
   };
   transcription: ModelSelection;
   finalTranscription: ModelSelection | null;
@@ -121,10 +127,17 @@ export interface Device {
 export interface Source {
   id: string;
   name: string;
-  kind: string;
+  kind: "screen" | "window" | "portal";
+  isPrimary?: boolean;
   width: number;
   height: number;
 }
+export interface SourcePreview {
+  width: number;
+  height: number;
+  image: string;
+}
+export type Translate = (de: string, en: string) => string;
 export interface Sources {
   devices: Device[] | null;
   sources: Source[] | null;

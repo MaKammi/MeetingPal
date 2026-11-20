@@ -985,27 +985,6 @@ small,
   line-height: 1.7;
   margin-top: 3px;
 }
-.nested-form {
-  background: #fbfafe;
-  border: 1px solid #f0edf6;
-  border-radius: 10px;
-  padding: 14px;
-  margin: 10px 0;
-}
-.nested-form select {
-  font-size: 11px;
-}
-.crop-fields {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 9px;
-  font-size: 10px;
-  color: #8f859f;
-}
-.crop-fields input {
-  margin-top: 5px;
-  font-size: 11px;
-}
 .modal-footer {
   padding: 16px 28px 20px;
   border-top: 1px solid #eeeaf5;

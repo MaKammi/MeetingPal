@@ -140,6 +140,19 @@ impl Capturer {
         }
     }
 
+    /// A still preview must also finish when a minimized target produces no frames.
+    pub fn get_next_frame_timeout(&self, timeout: std::time::Duration) -> Result<Frame, mpsc::RecvTimeoutError> {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let remaining = deadline.checked_duration_since(std::time::Instant::now())
+                .ok_or(mpsc::RecvTimeoutError::Timeout)?;
+            let item = self.rx.recv_timeout(remaining)?;
+            if let Some(frame) = self.engine.process_channel_item(item) {
+                return Ok(frame);
+            }
+        }
+    }
+
     /// Get the dimensions the frames will be captured in
     pub fn get_output_frame_size(&mut self) -> [u32; 2] {
         self.engine.get_output_frame_size()

@@ -23,7 +23,8 @@ export async function api<T>(
       dataDirectory: "Desktop app",
       activeMeeting: null,
     } as Bootstrap as T;
-  if (command === "list_meetings") return [] as T;
+  if (command === "list_meetings" || command === "list_video_sources")
+    return [] as T;
   if (command === "capture_sources")
     return {
       devices: [],

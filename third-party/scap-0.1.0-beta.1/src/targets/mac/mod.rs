@@ -1,7 +1,7 @@
-use cidre::{cg, ns, sc};
-use cocoa::appkit::{NSApp, NSScreen};
+use cidre::{cg, sc};
+use cocoa::appkit::NSScreen;
 use cocoa::base::{id, nil};
-use cocoa::foundation::{NSRect, NSString, NSUInteger};
+use cocoa::foundation::NSString;
 use futures::executor::block_on;
 use objc::{msg_send, sel, sel_impl};
 
@@ -62,10 +62,17 @@ pub fn get_all_targets() -> Vec<Target> {
             // on intel chips we can have Some but also a null pointer for some reason
             .filter(|v| !unsafe { v.utf8_chars_ar().is_null() });
 
+        // External applications' windows do not belong to NSApp.
+        let filter = sc::ContentFilter::with_desktop_independent_window(window);
+        let size = filter.content_rect().size;
         let target = Target::Window(super::Window {
             id,
             title: title.map(|v| v.to_string()).unwrap_or_default(),
             raw_handle: id,
+            dimensions: (size.width.round() as u64, size.height.round() as u64),
+            scale_factor: f64::from(filter.point_pixel_scale()),
+            owned_by_current_process: window.owning_app()
+                .is_some_and(|app| app.process_id() as u32 == std::process::id()),
         });
         targets.push(target);
     }
@@ -86,29 +93,17 @@ pub fn get_main_display() -> Display {
 
 pub fn get_scale_factor(target: &Target) -> f64 {
     match target {
-        Target::Window(window) => unsafe {
-            let cg_win_id = window.raw_handle;
-            let ns_app: id = NSApp();
-            let ns_window: id = msg_send![ns_app, windowWithWindowNumber: cg_win_id as NSUInteger];
-            let scale_factor: f64 = msg_send![ns_window, backingScaleFactor];
-            scale_factor
-        },
+        Target::Window(window) => window.scale_factor,
         Target::Display(display) => {
             let mode = display.raw_handle.display_mode().unwrap();
-            (mode.pixel_width() / mode.width()) as f64
+            mode.pixel_width() as f64 / mode.width() as f64
         }
     }
 }
 
 pub fn get_target_dimensions(target: &Target) -> (u64, u64) {
     match target {
-        Target::Window(window) => unsafe {
-            let cg_win_id = window.raw_handle;
-            let ns_app: id = NSApp();
-            let ns_window: id = msg_send![ns_app, windowWithWindowNumber: cg_win_id as NSUInteger];
-            let frame: NSRect = msg_send![ns_window, frame];
-            (frame.size.width as u64, frame.size.height as u64)
-        },
+        Target::Window(window) => window.dimensions,
         Target::Display(display) => {
             let mode = display.raw_handle.display_mode().unwrap();
             (mode.width(), mode.height())

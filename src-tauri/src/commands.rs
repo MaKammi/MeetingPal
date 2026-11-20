@@ -46,6 +46,57 @@ pub async fn capture_sources() -> Response<Value> {
     }).await.map_err(message)
 }
 #[tauri::command]
+pub async fn capture_source_preview(
+    _window: tauri::Window,
+    kind: VideoKind,
+    id: String,
+    detail: bool,
+) -> Response<crate::capture::SourcePreview> {
+    static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+    #[cfg(target_os = "windows")]
+    static PREVIEW_EXCLUSION: std::sync::RwLock<()> = std::sync::RwLock::new(());
+    let slot = SLOTS.acquire().await.map_err(message)?;
+    tokio::task::spawn_blocking(move || {
+        let _slot = slot;
+        #[cfg(target_os = "windows")]
+        {
+            // Screen thumbnails should show what is behind the picker. Keep window
+            // thumbnails (including MeetingPal itself) outside this brief exclusion.
+            if kind == VideoKind::Screen {
+                let _exclusive = PREVIEW_EXCLUSION.write().unwrap_or_else(|e| e.into_inner());
+                struct Restore(tauri::Window);
+                impl Drop for Restore {
+                    fn drop(&mut self) {
+                        let _ = self.0.set_content_protected(false);
+                    }
+                }
+                _window.set_content_protected(true)?;
+                let _restore = Restore(_window);
+                return crate::capture::source_preview(kind, id, detail);
+            }
+        }
+        #[cfg(target_os = "windows")]
+        let _window_read = PREVIEW_EXCLUSION.read().unwrap_or_else(|e| e.into_inner());
+        crate::capture::source_preview(kind, id, detail)
+    })
+    .await
+    .map_err(message)?
+    .map_err(message)
+}
+#[tauri::command]
+pub async fn list_video_sources() -> Response<Vec<crate::capture::Source>> {
+    tokio::task::spawn_blocking(|| {
+        #[cfg(target_os = "macos")]
+        if !scap::has_permission() {
+            scap::request_permission();
+        }
+        NativeCapture.sources()
+    })
+    .await
+    .map_err(message)?
+    .map_err(message)
+}
+#[tauri::command]
 pub fn save_settings(state: State<'_, Arc<AppState>>, mut settings: Settings) -> Response<()> {
     if !["de", "en"].contains(&settings.locale.as_str()) {
         return Err("Unsupported interface language".into());
@@ -178,6 +229,34 @@ async fn start_recording_inner(
     } else {
         Some(state.runtimes.get("ffmpeg")?)
     };
+    let mut command: tokio::process::Command =
+        crate::capture::hidden_command(std::env::current_exe()?).into();
+    #[cfg(target_os = "linux")]
+    let portal_grant = {
+        use tauri::Manager;
+        if let Some(id) = config
+            .video
+            .id
+            .as_deref()
+            .filter(|id| config.video.kind == VideoKind::Portal && id.starts_with("portal:"))
+        {
+            let grant = app
+                .state::<crate::capture_linux::PortalSources>()
+                .lock()
+                .unwrap()
+                .get(id)
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "The system capture session has ended. Select the source again."
+                    )
+                })?;
+            grant.attach(&mut command).await?;
+            Some(grant)
+        } else {
+            None
+        }
+    };
     let mut meeting = Meeting::new(config.clone());
     meeting.status = "starting".into();
     if test {
@@ -193,8 +272,6 @@ async fn start_recording_inner(
     };
     let spec_path = folder.join("worker.json");
     atomic_json(&spec_path, &spec)?;
-    let mut command: tokio::process::Command =
-        crate::capture::hidden_command(std::env::current_exe()?).into();
     let mut child = command
         .arg("--capture-worker")
         .arg(spec_path)
@@ -213,6 +290,9 @@ async fn start_recording_inner(
     drop(guard);
     let id = meeting.id.clone();
     tauri::async_runtime::spawn(async move {
+        // The setup dialog can release its copy once the recorder is running.
+        #[cfg(target_os = "linux")]
+        let _grant = portal_grant;
         let mut lines = tokio::io::BufReader::new(stdout).lines();
         let mut stopped = false;
         while let Ok(Some(line)) = lines.next_line().await {

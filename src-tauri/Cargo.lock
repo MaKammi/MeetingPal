@@ -3236,6 +3236,7 @@ dependencies = [
  "hound",
  "image",
  "keyring",
+ "libc",
  "lopdf",
  "pipewire",
  "reqwest 0.12.28",

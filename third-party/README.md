@@ -13,3 +13,7 @@ units. MeetingPal uses its own shared monotonic video/audio timeline.
 Target dimensions are re-exported for source selection. The macOS audio path fixes
 explicit 48 kHz / stereo configuration and derives planar layout from the native
 buffer count, so ScreenCaptureKit system audio can support macOS 14.2.
+
+Source previews can wait for a single frame with a deadline. Full-window
+capture uses the actual Windows frame dimensions and row stride. On macOS,
+foreign window bounds and scale come from the ScreenCaptureKit content filter.

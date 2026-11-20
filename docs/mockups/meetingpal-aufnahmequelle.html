@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeetingPal · Aufnahmequelle wählen</title>
+</head>
+<body>
+<div id="mp-source-mock" class="viz-dotted-background" lang="de">
+  <style>
+    #mp-source-mock { container-type:inline-size; padding:14px 12px 18px; width:100%; box-sizing:border-box; }
+    #mp-source-mock .mp-dialog {
+      --paper:light-dark(#fff,#20212d); --soft:light-dark(#f8f8fc,#252633);
+      --ink:light-dark(#25263b,#f2f1fa); --sub:light-dark(#606378,#b4b6cc);
+      --line:light-dark(#e2e2ed,#434455); --quiet:light-dark(#efedf9,#383545);
+      --brand:light-dark(#6958d0,#b5a7ff); --cta:light-dark(#6958d0,#aa9bf8);
+      --cta-ink:light-dark(#fff,#201733); --chosen:light-dark(#faf8ff,#2c293a);
+      background:var(--paper); color:var(--ink); font:14px/1.4 Inter,"Segoe UI",system-ui,sans-serif;
+      border:1px solid var(--line); border-radius:18px; overflow:hidden; max-width:760px;
+      margin:0 auto; box-shadow:0 9px 32px rgb(31 27 64 / .09),0 1px 3px rgb(31 27 64 / .05);
+      text-align:left; color-scheme:inherit;
+    }
+    #mp-source-mock .mp-dialog *, #mp-source-mock .mp-dialog *::before, #mp-source-mock .mp-dialog *::after { box-sizing:border-box; }
+    #mp-source-mock [hidden] { display:none !important; }
+    #mp-source-mock h2, #mp-source-mock h3, #mp-source-mock p { margin:0; color:inherit; }
+    #mp-source-mock .mp-head { padding:19px 22px 0; }
+    #mp-source-mock .mp-crumbs { display:flex; align-items:center; gap:8px; color:var(--sub); font-size:12px; }
+    #mp-source-mock .mp-wordmark { display:inline-flex; gap:6px; align-items:center; font-weight:650; font-size:13px; letter-spacing:-.35px; color:var(--ink); }
+    #mp-source-mock .mp-wordmark b { font-weight:inherit; color:var(--brand); }
+    #mp-source-mock .mp-wordmark img { width:20px; height:20px; border-radius:5px; }
+    #mp-source-mock .mp-titleline { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:11px 0 0; }
+    #mp-source-mock h2 { font-size:clamp(21px,3.6cqw,26px); letter-spacing:-.8px; font-weight:650; line-height:1.2; }
+    #mp-source-mock h3 { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:650; line-height:1.3; letter-spacing:-.22px; }
+    #mp-source-mock .mp-dialog svg { display:block; flex:none; width:17px; height:17px; stroke-width:1.8; }
+    #mp-source-mock .mp-crumbs > svg { width:12px; height:12px; opacity:.65; }
+    #mp-source-mock h3 svg { color:var(--sub); }
+    #mp-source-mock .mp-body { padding:17px 22px 21px; min-width:0; }
+    #mp-source-mock .mp-window-group { margin-top:18px; padding-top:15px; border-top:1px solid var(--line); }
+    #mp-source-mock .mp-grid { display:grid; margin-top:9px; gap:10px; }
+    #mp-source-mock .mp-screens { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    #mp-source-mock .mp-windows { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    #mp-source-mock .mp-card { display:block; position:relative; min-width:0; margin:0; font:inherit; }
+    #mp-source-mock .mp-card input { position:absolute; width:1px; height:1px; clip-path:inset(50%); margin:0; padding:0; }
+    #mp-source-mock .mp-tile { display:block; overflow:hidden; padding:4px; background:var(--paper); border:1px solid var(--line); border-radius:11px; height:100%; }
+    #mp-source-mock .mp-card:hover .mp-tile { border-color:var(--sub); }
+    #mp-source-mock .mp-card input:checked + .mp-tile { border-color:var(--brand); box-shadow:0 0 0 1px var(--brand); background:var(--chosen); }
+    #mp-source-mock .mp-card input:focus-visible + .mp-tile { outline:2px solid var(--brand); outline-offset:3px; }
+    #mp-source-mock .mp-thumb { display:block; position:relative; overflow:hidden; border-radius:6px; aspect-ratio:16/9; background:#ececf1; }
+    #mp-source-mock .mp-thumb canvas, #mp-source-mock .mp-review-image canvas { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:contain; }
+    #mp-source-mock .mp-card[data-id="screen-two"] .mp-thumb { background:#dec3a9; }
+    #mp-source-mock .mp-card[data-id="slides"] .mp-thumb { background:#e6e2df; }
+    #mp-source-mock .mp-card[data-id="notes"] .mp-thumb { background:#d8e2dc; }
+    #mp-source-mock .mp-card[data-id="board"] .mp-thumb { background:#dedce8; }
+    #mp-source-mock .mp-tick { position:absolute; right:6px; top:6px; display:none; align-items:center; justify-content:center; width:21px; height:21px; border-radius:50%; background:#6958d0; color:white; border:2px solid white; box-shadow:0 1px 4px #25203d55; }
+    #mp-source-mock .mp-tick svg { width:13px; height:13px; stroke-width:3; }
+    #mp-source-mock input:checked + .mp-tile .mp-tick { display:flex; }
+    #mp-source-mock .mp-caption { display:grid; gap:1px; padding:7px 6px 5px; min-width:0; }
+    #mp-source-mock .mp-name { color:var(--ink); font-weight:620; font-size:14px; line-height:1.3; overflow-wrap:anywhere; }
+    #mp-source-mock .mp-sub { color:var(--sub); font-size:12px; line-height:1.45; }
+    #mp-source-mock .mp-size { white-space:nowrap; font-variant-numeric:tabular-nums; }
+    #mp-source-mock .mp-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    #mp-source-mock .mp-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:13px 22px; border-top:1px solid var(--line); background:var(--soft); }
+    #mp-source-mock .mp-selection { display:flex; gap:9px; align-items:center; min-width:0; }
+    #mp-source-mock .mp-selection > svg { color:var(--brand); width:20px; height:20px; }
+    #mp-source-mock .mp-selection strong,#mp-source-mock .mp-selection small { display:block; }
+    #mp-source-mock .mp-selection strong { color:var(--ink); font-size:13px; font-weight:620; }
+    #mp-source-mock .mp-selection small { color:var(--sub); font-size:12px; }
+    #mp-source-mock .mp-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; appearance:none; font:600 13px/1.25 Inter,"Segoe UI",system-ui,sans-serif; padding:9px 12px; border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--ink); white-space:normal; margin:0; }
+    #mp-source-mock .mp-button:hover:not(:disabled) { background:var(--quiet); }
+    #mp-source-mock .mp-primary { background:var(--cta); border-color:var(--cta); color:var(--cta-ink); }
+    #mp-source-mock .mp-primary:hover:not(:disabled) { background:color-mix(in srgb,var(--cta) 92%,var(--ink)); }
+    #mp-source-mock .mp-button:disabled { opacity:.45; cursor:not-allowed; }
+    #mp-source-mock button:focus-visible { outline:2px solid var(--brand); outline-offset:3px; }
+    #mp-source-mock .mp-icon { padding:6px; background:transparent; border:0; min-width:32px; min-height:32px; color:var(--sub); }
+    #mp-source-mock .mp-icon svg { width:18px; height:18px; }
+    #mp-source-mock .mp-quiet { background:transparent; }
+    #mp-source-mock .mp-crop-head { display:flex; justify-content:space-between; align-items:baseline; gap:4px 14px; flex-wrap:wrap; margin-bottom:10px; }
+    #mp-source-mock .mp-stage-wrap { padding:3px; border-radius:10px; background:var(--quiet); }
+    #mp-source-mock .mp-stage { position:relative; display:block; width:100%; aspect-ratio:16/9; overflow:hidden; margin:0; padding:0; border:0; border-radius:7px; color:inherit; background:var(--paper); touch-action:none; user-select:none; cursor:crosshair; }
+    #mp-source-mock .mp-stage > canvas { display:block; width:100%; height:100%; position:absolute; inset:0; pointer-events:none; }
+    #mp-source-mock .mp-stage[data-empty="true"]::after { content:""; position:absolute; inset:0; pointer-events:none; background:#11162620; }
+    #mp-source-mock .mp-rect { position:absolute; display:block; box-shadow:0 0 0 100vmax #1415298c,inset 0 0 0 2px #ece7ff,inset 0 0 0 3px #6c53e4; cursor:move; }
+    #mp-source-mock .mp-handle { position:absolute; display:grid; place-items:center; width:23px; height:23px; z-index:1; }
+    #mp-source-mock .mp-handle::after { content:""; background:#fff; border:1.5px solid #6650bd; border-radius:2px; width:8px; height:8px; }
+    #mp-source-mock [data-handle="nw"] { top:0; left:0; transform:translate(-50%,-50%); cursor:nwse-resize; }
+    #mp-source-mock [data-handle="ne"] { top:0; right:0; transform:translate(50%,-50%); cursor:nesw-resize; }
+    #mp-source-mock [data-handle="sw"] { bottom:0; left:0; transform:translate(-50%,50%); cursor:nesw-resize; }
+    #mp-source-mock [data-handle="se"] { bottom:0; right:0; transform:translate(50%,50%); cursor:nwse-resize; }
+    #mp-source-mock .mp-crop-help { display:flex; align-items:center; gap:7px; color:var(--sub); font-size:13px; margin-top:10px; }
+    #mp-source-mock .mp-crop-help svg { width:15px; height:15px; flex:none; }
+    #mp-source-mock .mp-hint-row { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:4px 12px; }
+    #mp-source-mock .mp-redraw { min-width:0; border:0; color:var(--brand); background:transparent; padding:4px 0; font-weight:550; }
+    #mp-source-mock .mp-review-image { position:relative; margin:0 0 13px; border:1px solid var(--line); background:var(--soft); border-radius:10px; overflow:hidden; aspect-ratio:2.2; }
+    #mp-source-mock .mp-dialog[data-view="preview"] .mp-review-image { aspect-ratio:16/10; }
+    #mp-source-mock .mp-empty { display:flex; align-items:center; gap:12px; padding:14px 0 8px; }
+    #mp-source-mock .mp-sr { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+    #mp-source-mock .mp-window-group[data-layout="Liste"] .mp-windows { grid-template-columns:minmax(0,1fr); gap:6px; }
+    #mp-source-mock .mp-window-group[data-layout="Liste"] .mp-tile { display:grid; grid-template-columns:104px minmax(0,1fr); align-items:center; }
+    @container (max-width:560px) {
+      #mp-source-mock .mp-head { padding:16px 15px 0; }
+      #mp-source-mock .mp-body { padding:14px 15px 17px; }
+      #mp-source-mock .mp-foot { padding:12px 15px; }
+      #mp-source-mock .mp-actions { margin-left:auto; }
+      #mp-source-mock .mp-grid { gap:8px; }
+      #mp-source-mock .mp-caption { padding:6px 4px 4px; }
+    }
+    @container (max-width:455px) {
+      #mp-source-mock .mp-windows { grid-template-columns:minmax(0,1fr); gap:6px; }
+      #mp-source-mock .mp-windows .mp-tile { display:grid; grid-template-columns:86px minmax(0,1fr); gap:5px; align-items:center; }
+      #mp-source-mock .mp-selection { flex-basis:100%; }
+      #mp-source-mock .mp-actions { width:100%; justify-content:flex-end; }
+      #mp-source-mock .mp-foot .mp-button { padding:9px 10px; }
+      #mp-source-mock .mp-caption .mp-display-meta { display:block; }
+      #mp-source-mock .mp-caption .mp-dot { display:none; }
+      #mp-source-mock .mp-card .mp-name { font-size:13px; }
+    }
+    @container (max-width:300px) {
+      #mp-source-mock .mp-head { padding:13px 10px 0; }
+      #mp-source-mock .mp-body, #mp-source-mock .mp-foot { padding:11px 10px; }
+      #mp-source-mock .mp-actions { justify-content:stretch; }
+      #mp-source-mock .mp-actions .mp-button { flex:1; }
+    }
+    @media (pointer:coarse) {
+      #mp-source-mock .mp-button { min-height:44px; }
+      #mp-source-mock .mp-icon { min-width:44px; }
+      #mp-source-mock .mp-handle { width:36px; height:36px; }
+    }
+  </style>
+  <section class="mp-dialog" aria-label="MeetingPal – Aufnahmequelle">
+    <header class="mp-head">
+      <div class="mp-crumbs">
+        <span class="mp-wordmark"><img alt="" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+PHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHJ4PSIxMjIiIGZpbGw9IiM2OTYwZTgiLz48ZyBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMzYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+PHBhdGggZD0iTTEzNiAyMzB2NTJNMTk2IDE3MHYxNzJNMjU2IDEyNnYyNjBNMzE2IDE4MHYxNTJNMzc2IDIzMHY1MiIvPjwvZz48L3N2Zz4NCg=="><span>Meeting<b>Pal</b></span></span>
+        <i data-lucide="chevron-right" aria-hidden="true"></i><span>Meeting aufnehmen</span>
+      </div>
+      <div class="mp-titleline">
+        <h2 data-el="title">Aufnahmequelle wählen</h2>
+        <button type="button" class="mp-button mp-icon cursor-interaction" data-el="close" aria-label="Auswahl schließen"><i data-lucide="x" aria-hidden="true"></i></button>
+      </div>
+    </header>
+    <div data-page="picker">
+      <div class="mp-body" role="radiogroup" aria-label="Aufnahmequelle">
+        <section aria-labelledby="mp-screen-heading">
+          <h3 id="mp-screen-heading"><i data-lucide="monitor" aria-hidden="true"></i>Bildschirme</h3>
+          <div class="mp-grid mp-screens" data-el="screens"></div>
+        </section>
+        <section class="mp-window-group" data-el="window-group" aria-labelledby="mp-window-heading">
+          <h3 id="mp-window-heading"><i data-lucide="app-window" aria-hidden="true"></i>Fenster</h3>
+          <div class="mp-grid mp-windows" data-el="windows"></div>
+        </section>
+      </div>
+      <footer class="mp-foot">
+        <div class="mp-selection" aria-live="polite">
+          <i data-lucide="check-circle-2" aria-hidden="true"></i>
+          <div><strong data-el="chosen-name"></strong><small data-el="chosen-detail"></small></div>
+        </div>
+        <div class="mp-actions">
+          <button type="button" class="mp-button cursor-interaction" data-el="preview-source"><i data-lucide="maximize-2" aria-hidden="true"></i>Vorschau</button>
+          <button type="button" class="mp-button cursor-interaction" data-el="edit-area"><i data-lucide="scan" aria-hidden="true"></i><span data-el="edit-text">Bereich aufziehen</span></button>
+          <button type="button" class="mp-button mp-primary cursor-interaction" data-el="apply-source">Quelle übernehmen</button>
+        </div>
+      </footer>
+    </div>
+    <div data-page="crop" hidden>
+      <div class="mp-body">
+        <div class="mp-crop-head"><h3><i data-lucide="monitor" aria-hidden="true"></i><span data-el="crop-name"></span></h3><span class="mp-sub mp-size" data-el="crop-source-size"></span></div>
+        <div class="mp-stage-wrap">
+          <button type="button" class="mp-stage" data-el="stage" aria-label="Aufnahmebereich in der Bildschirmvorschau auswählen" aria-describedby="mp-crop-hint mp-crop-keys">
+            <canvas data-el="stage-image" aria-hidden="true"></canvas>
+            <span class="mp-rect" data-el="rect" hidden><span class="mp-handle" data-handle="nw"></span><span class="mp-handle" data-handle="ne"></span><span class="mp-handle" data-handle="sw"></span><span class="mp-handle" data-handle="se"></span></span>
+          </button>
+        </div>
+        <div class="mp-hint-row"><p class="mp-crop-help" id="mp-crop-hint"><i data-lucide="mouse-pointer-2" aria-hidden="true"></i><span data-el="hint">Ziehe mit der Maus ein Rechteck auf.</span></p><button type="button" class="mp-button mp-redraw cursor-interaction" data-el="redraw" hidden>Neu aufziehen</button></div>
+        <p class="mp-sr" id="mp-crop-keys">Mit der Eingabetaste einen mittigen Ausschnitt wählen. Mit Pfeiltasten verschieben, mit Umschalt und Pfeiltasten die Größe ändern. Escape geht zurück.</p>
+      </div>
+      <footer class="mp-foot">
+        <div class="mp-selection"><i data-lucide="scan" aria-hidden="true"></i><div><strong>Aufnahmebereich</strong><small class="mp-size" data-el="dimensions"></small></div></div>
+        <div class="mp-actions">
+          <button type="button" class="mp-button mp-quiet cursor-interaction" data-el="full-screen">Ganzer Bildschirm</button>
+          <button type="button" class="mp-button mp-primary cursor-interaction" data-el="apply-area" disabled>Bereich übernehmen</button>
+        </div>
+      </footer>
+    </div>
+    <div data-page="review" hidden>
+      <div class="mp-body">
+        <div class="mp-review-image" data-el="review-image"><canvas data-el="review-canvas" role="img" aria-label="Vorschau der übernommenen Aufnahmequelle"></canvas></div>
+        <div class="mp-empty" data-el="empty" hidden><i data-lucide="video" aria-hidden="true"></i><span class="mp-sub">Wähle einen Bildschirm oder ein Fenster für dein Meeting.</span></div>
+      </div>
+      <footer class="mp-foot">
+        <div class="mp-selection" aria-live="polite"><i data-lucide="video" aria-hidden="true"></i><div><strong data-el="review-name"></strong><small data-el="review-detail"></small></div></div>
+        <div class="mp-actions">
+          <button type="button" class="mp-button cursor-interaction" data-el="reopen"></button>
+          <button type="button" class="mp-button cursor-interaction" data-el="edit-preview" hidden><i data-lucide="scan" aria-hidden="true"></i><span data-el="edit-preview-text">Bereich aufziehen</span></button>
+          <button type="button" class="mp-button mp-primary cursor-interaction" data-el="apply-preview" hidden>Quelle übernehmen</button>
+        </div>
+      </footer>
+    </div>
+    <span role="status" aria-live="polite" class="mp-sr" data-el="notice"></span>
+  </section>
+  <script>
+  (() => {
+    const root = document.getElementById("mp-source-mock");
+    const el = name => root.querySelector('[data-el="' + name + '"]');
+    const sources = [
+      { id:"screen-one", name:"Bildschirm 1", type:"screen", detail:"Hauptbildschirm", w:2560, h:1440 },
+      { id:"screen-two", name:"Bildschirm 2", type:"screen", detail:"Laptopdisplay", w:1920, h:1200 },
+      { id:"slides", name:"Quartalsplanung", type:"window", detail:"Präsentation", w:1440, h:900 },
+      { id:"notes", name:"Teamnotizen", type:"window", detail:"Textdokument", w:1200, h:900 },
+      { id:"board", name:"Sprintboard", type:"window", detail:"Projektboard", w:1600, h:900 }
+    ];
+    const sourceById = new Map(sources.map(source => [source.id, source]));
+    const images = new Map();
+    const fmt = new Intl.NumberFormat("de-DE");
+    const sizeText = (w,h) => fmt.format(w) + " × " + fmt.format(h) + " px";
+    const clamp = (n, low, high) => Math.max(low, Math.min(n, high));
+    const makeCanvas = (w,h) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      return canvas;
+    };
+    function box(c,x,y,w,h,color,radius=0) {
+      c.fillStyle = color; c.beginPath(); c.roundRect(x,y,w,h,radius); c.fill();
+    }
+    function type(c,text,x,y,px,colour,weight=500) {
+      c.fillStyle = colour; c.font = weight + " " + px + 'px "Segoe UI",Arial,sans-serif'; c.fillText(text,x,y);
+    }
+    function disc(c,x,y,r,color) {
+      c.beginPath(); c.arc(x,y,r,0,Math.PI*2); c.fillStyle=color; c.fill();
+    }
+    function lines(c,x,y,widths,colour,spacing=18,thickness=4) {
+      widths.forEach((w,i) => box(c,x,y+i*spacing,w,thickness,colour,thickness/2));
+    }
+    function slide(c,x,y,w,h,small=false) {
+      c.save(); c.translate(x,y); c.scale(w/680,h/380);
+      box(c,0,0,680,380,"#fff2dc");
+      c.save(); c.beginPath(); c.rect(326,0,354,380); c.clip();
+      const warm = c.createLinearGradient(320,0,660,380); warm.addColorStop(0,"#fdc080"); warm.addColorStop(1,"#f08558");
+      box(c,326,0,354,380,warm);
+      for (let i=0;i<12;i++) {
+        const q=i/11, offset=i*11;
+        c.beginPath(); c.moveTo(272,360+offset);
+        c.bezierCurveTo(320,208+offset,480,326+offset,506,164+offset);
+        c.bezierCurveTo(519,84+offset,597,117+offset,708,-51+offset);
+        c.lineTo(755,530); c.lineTo(272,530); c.closePath();
+        c.fillStyle="rgb("+Math.round(247-q*128)+","+Math.round(154-q*107)+","+Math.round(99-q*42)+")"; c.fill();
+      }
+      c.restore();
+      type(c,"PRODUKTTEAM   /   Q4",25,37,13,"#8f513f",650);
+      type(c,"Quartals-",23,172,61,"#4a2a30",650); type(c,"planung",23,234,61,"#4a2a30",650);
+      if (!small) type(c,"Oktober – Dezember",27,338,17,"#764e4b");
+      c.restore();
+    }
+    function windowPicture(id) {
+      const src=sourceById.get(id), canvas=makeCanvas(960,Math.round(960*src.h/src.w)), c=canvas.getContext("2d");
+      const w=canvas.width, h=canvas.height;
+      box(c,0,0,w,h,"#f5f4f7"); box(c,0,0,w,37,"#fbfafc"); box(c,0,36,w,1,"#dcd9e1");
+      const accent = id==="slides" ? "#c16d44" : id==="notes" ? "#57836c" : "#7565a6";
+      box(c,15,10,17,17,accent,4); type(c,src.name,43,24,15,"#3c3b47",600);
+      box(c,w-80,17,11,1,"#777482"); box(c,w-48,13,10,8,"#bebbc7",1); type(c,"×",w-20,24,15,"#716f79");
+      if (id==="slides") {
+        box(c,0,38,w,35,"#fcfaf9");
+        type(c,"Start       Einfügen       Entwurf       Präsentieren",16,60,13,"#6c646a");
+        box(c,0,73,144,h-73,"#e6e2e3"); box(c,144,73,w-144,h-73,"#eee9e7");
+        slide(c,13,92,117,67,true);
+        box(c,13,174,117,67,"#fff3e0"); type(c,"Ziele",21,193,12,"#69483d",650); lines(c,22,204,[82,62,49],"#dcb596",8,3);
+        box(c,13,257,117,67,"#e4aa80"); box(c,25,291,15,20,"#955643"); box(c,46,281,15,30,"#c07554"); box(c,67,271,15,40,"#f3d2af");
+        const sw=738, sh=sw*380/680, sy=80+(h-80-sh)/2;
+        c.save(); c.shadowColor="#46353029"; c.shadowBlur=12; box(c,181,sy,sw,sh,"#fff3df"); c.restore();
+        slide(c,181,sy,sw,sh);
+      } else if (id==="notes") {
+        box(c,0,37,179,h-37,"#e0e9e2"); box(c,179,37,w-179,h-37,"#fdfbf5");
+        type(c,"Notizbuch",17,86,24,"#39534a",650);
+        ["Übersicht","Teamnotizen","Entscheidungen","Offene Fragen"].forEach((name,i) => {
+          const y=111+i*43; if(i===1) box(c,9,y,161,35,"#c5d8ca",6);
+          type(c,name,23,y+22,15,"#445c50",i===1?650:450);
+        });
+        type(c,"PRODUKTTEAM",236,103,15,"#648673",650); type(c,"Teamnotizen",232,170,56,"#293e32",650);
+        type(c,"Jour fixe am Donnerstag",236,216,22,"#68776a"); box(c,236,244,620,2,"#d9ddd1");
+        type(c,"Themen für heute",236,302,28,"#344c3b",650);
+        ["Rückblick auf den letzten Sprint","Prioritäten für die nächste Woche","Offene Entscheidungen im Team"].forEach((item,i) => {
+          disc(c,243,343+i*41,4,"#8daa91"); type(c,item,264,350+i*41,21,"#4c5b4e");
+        });
+        box(c,235,487,582,91,"#e5eddc",9); box(c,235,487,5,91,"#72916f",2);
+        type(c,"Nächste Schritte",258,523,21,"#354d39",650); lines(c,258,546,[420],"#b9c8ad",12,5);
+      } else {
+        box(c,0,37,w,h-37,"#eeebf5"); type(c,"Produktteam",24,78,16,"#776e8d",550);
+        type(c,"Sprintboard",22,127,43,"#353047",650);
+        const cols=[
+          ["Geplant","#d6cbed",["Nutzerinterviews","Konzept skizzieren"]],
+          ["In Arbeit","#efcfac",["Entwurf prüfen","Feedback bündeln"]],
+          ["Erledigt","#c6dccc",["Kick-off","Ziele abstimmen"]]
+        ];
+        cols.forEach(([name,tint,tasks],i) => {
+          const x=23+i*311; box(c,x,157,291,h-178,"#f9f8fb",10); disc(c,x+20,182,6,tint); type(c,name,x+36,190,21,"#4a455a",650);
+          tasks.forEach((task,j) => {
+            const y=211+j*104; box(c,x+12,y,267,91,tint,7); type(c,task,x+23,y+33,19,"#49424d",600);
+            lines(c,x+24,y+47,[120+j*42],"#ffffff95",10,4); disc(c,x+243,y+68,10,"#ffffffb8");
+          });
+        });
+      }
+      return canvas;
+    }
+    function desktopPicture(id) {
+      const src=sourceById.get(id), w=1280, h=Math.round(w*src.h/src.w), canvas=makeCanvas(w,h), c=canvas.getContext("2d");
+      const cool=id==="screen-one";
+      const sky=c.createLinearGradient(0,0,w*.28,h*.72);
+      sky.addColorStop(0,cool?"#648fa4":"#b897b1"); sky.addColorStop(.55,cool?"#b0d2ce":"#edbd9e"); sky.addColorStop(1,cool?"#f1d9ad":"#ffdcaa");
+      box(c,0,0,w,h,sky);
+      const sunX=cool?w*.79:w*.81, sunY=h*.26;
+      const sun=c.createRadialGradient(sunX,sunY,8,sunX,sunY,w*.32);
+      sun.addColorStop(0,"#fff2cb9c"); sun.addColorStop(1,"#fff2cb00"); box(c,0,0,w,h,sun);
+      if (!cool) disc(c,sunX,sunY,37,"#ffebc2");
+      const ridges=cool?["#a9c2bb","#829f9e","#608789","#3d6d72","#27575f","#193e49"]:["#d9b3ad","#cc9e91","#be8c77","#ad755e","#995e50","#704c51"];
+      ridges.forEach((colour,i) => {
+        c.beginPath(); c.moveTo(0,h); const phase=(cool?1.3:.1)+i*1.74;
+        for(let x=0;x<=w+3;x+=3) {
+          const t=x/w;
+          const hill=.088*Math.sin(t*(cool?9:6.4)+phase)+.044*Math.sin(t*14+phase*.7)+(cool?.019*Math.sin(t*29+phase*2)+.008*Math.sin(t*70+phase)+.003*Math.cos(t*143+i):.019*Math.sin(t*9+i));
+          c.lineTo(x,h*(.40+i*.093+hill));
+        }
+        c.lineTo(w,h); c.closePath(); c.fillStyle=colour; c.fill();
+      });
+      function putWindow(imgId,x,y,width) {
+        const pic=images.get(imgId), height=width*pic.height/pic.width;
+        c.save(); c.shadowColor="rgba(14,23,31,.40)"; c.shadowBlur=20; c.shadowOffsetY=9; box(c,x,y,width,height,"#fff",7); c.restore();
+        c.save(); c.beginPath(); c.roundRect(x,y,width,height,7); c.clip(); c.drawImage(pic,x,y,width,height); c.restore();
+      }
+      if(cool) { putWindow("notes",w*.075,h*.28,w*.34); putWindow("slides",w*.317,h*.105,w*.57); }
+      else { putWindow("board",w*.11,h*.16,w*.62); }
+      const dockW=248, dockX=(w-dockW)/2, dockY=h-46;
+      box(c,dockX,dockY,dockW,34,"#f8f5f0e6",11);
+      ["#5497bd","#d2a456","#8880ca","#598f77","#c47853","#7e8eae","#ada4bd"].forEach((color,i) => {
+        const x=dockX+17+i*32; box(c,x,dockY+7,20,20,color,5);
+        box(c,x+5,dockY+12,10,3,"#ffffffd6",1); box(c,x+5,dockY+18,7,2,"#ffffffaa",1);
+      });
+      return canvas;
+    }
+    ["slides","notes","board"].forEach(id => images.set(id,windowPicture(id)));
+    ["screen-one","screen-two"].forEach(id => images.set(id,desktopPicture(id)));
+    // Cards, enlarged previews and the final crop all use the same source image.
+    function paint(canvas, source, region=null) {
+      const pic=images.get(source.id);
+      const r=region || { x:0,y:0,w:source.w,h:source.h };
+      const scale=pic.width/source.w, scaleY=pic.height/source.h;
+      canvas.width=Math.max(1,Math.round(r.w*scale)); canvas.height=Math.max(1,Math.round(r.h*scaleY));
+      canvas.getContext("2d").drawImage(pic,r.x*scale,r.y*scaleY,r.w*scale,r.h*scaleY,0,0,canvas.width,canvas.height);
+    }
+    const cardById = new Map();
+    for(const source of sources) {
+      const card=document.createElement("label");
+      card.className="mp-card cursor-interaction"; card.dataset.id=source.id;
+      card.innerHTML='<input type="radio" name="mp-capture-source"><span class="mp-tile"><span class="mp-thumb"><canvas aria-hidden="true"></canvas><span class="mp-tick" aria-hidden="true"><i data-lucide="check"></i></span></span><span class="mp-caption"><span class="mp-name"></span><span class="mp-sub"></span></span></span>';
+      card.querySelector(".mp-name").textContent=source.name;
+      const meta=card.querySelector(".mp-sub");
+      meta.textContent=source.detail;
+      if(source.type==="screen") {
+        const dot=document.createElement("span"), resolution=document.createElement("span");
+        dot.className="mp-dot"; dot.textContent=" · ";
+        resolution.className="mp-size mp-display-meta"; resolution.textContent=sizeText(source.w,source.h);
+        meta.append(dot,resolution);
+      }
+      const input=card.querySelector("input");
+      input.value=source.id;
+      input.addEventListener("change",() => {
+        if(!input.checked) return;
+        draft={id:source.id,region:null}; render(); save();
+      });
+      paint(card.querySelector("canvas"),source);
+      el(source.type==="screen"?"screens":"windows").append(card);
+      cardById.set(source.id,input);
+    }
+    let page="picker";
+    let draft={id:"screen-one",region:null};
+    let applied=null;
+    let area=null;
+    let cropOrigin="picker";
+    let gesture=null;
+    const stage=el("stage"), selection=el("rect");
+    const copyRegion = r => r ? {...r} : null;
+    const copyChoice = choice => choice ? {id:choice.id,region:copyRegion(choice.region)} : null;
+    const validArea = r => !!r && r.w>=16 && r.h>=16;
+    const currentSource = () => sourceById.get(draft.id);
+    const fullLabel = src => src.type==="screen" ? "Gesamter Bildschirm" : "Gesamtes Fenster";
+    function validRegion(value, source) {
+      if (!value || source.type!=="screen") return null;
+      const {x,y,w,h}=value;
+      return [x,y,w,h].every(Number.isInteger) && x>=0 && y>=0 && w>=16 && h>=16 && x+w<=source.w && y+h<=source.h
+        ? {x,y,w,h} : null;
+    }
+    function validChoice(value) {
+      const src=sourceById.get(value?.id);
+      return src ? {id:src.id,region:validRegion(value.region,src)} : null;
+    }
+    function save() {
+      const api=window.openai;
+      if(!api || typeof api.setWidgetState!=="function") return;
+      const visible=page==="review"?applied:draft;
+      const src=visible && sourceById.get(visible.id);
+      const r=page==="crop"?area:visible?.region;
+      const data={
+        modelContent:{quelle:src?.name || null, ansicht:page, ausschnitt:r ? {x:r.x,y:r.y,breite:r.w,hoehe:r.h} : null},
+        privateContent:{version:1,page,draft:copyChoice(draft),applied:copyChoice(applied),area:page==="crop"?copyRegion(area):null,cropOrigin}
+      };
+      try { Promise.resolve(api.setWidgetState(data)).catch(() => {}); } catch {}
+    }
+    function restore(snapshot) {
+      const data=snapshot?.privateContent;
+      if(data?.version!==1 || !validChoice(data.draft) || gesture) return false;
+      draft=validChoice(data.draft); applied=validChoice(data.applied);
+      page=["picker","preview","crop","review"].includes(data.page)?data.page:"picker";
+      if(page==="crop" && currentSource().type!=="screen") page="picker";
+      area=page==="crop"?validRegion(data.area,currentSource()):null;
+      cropOrigin=data.cropOrigin==="preview"?"preview":"picker";
+      return true;
+    }
+    function renderArea() {
+      const src=currentSource(), hasArea=!!(area && area.w && area.h);
+      selection.hidden=!hasArea;
+      stage.dataset.empty=String(!hasArea);
+      if(hasArea) {
+        selection.style.left=(100*area.x/src.w)+"%"; selection.style.top=(100*area.y/src.h)+"%";
+        selection.style.width=(100*area.w/src.w)+"%"; selection.style.height=(100*area.h/src.h)+"%";
+      }
+      el("dimensions").textContent=hasArea?sizeText(area.w,area.h):"Noch keine Auswahl";
+      el("hint").textContent=hasArea?"Fläche verschieben oder an den Ecken anpassen.":"Ziehe mit der Maus ein Rechteck auf.";
+      el("redraw").hidden=!hasArea;
+      el("apply-area").disabled=!validArea(area);
+    }
+    function render() {
+      root.querySelector(".mp-dialog").dataset.view=page;
+      const visiblePanel=page==="preview"?"review":page;
+      root.querySelectorAll("[data-page]").forEach(node => { node.hidden=node.dataset.page!==visiblePanel; });
+      const src=currentSource();
+      const headings={picker:"Aufnahmequelle wählen",crop:"Aufnahmebereich festlegen",preview:"Quellenvorschau",review:"Videoquelle für dein Meeting"};
+      el("title").textContent=headings[page]; el("close").hidden=page==="review";
+      el("close").setAttribute("aria-label",page==="picker"?"Auswahl schließen":page==="crop" && cropOrigin==="preview"?"Zurück zur Vorschau":"Zurück zur Quellenauswahl");
+      if(page==="picker") {
+        cardById.get(draft.id).checked=true;
+        el("chosen-name").textContent=src.name;
+        el("chosen-detail").textContent=draft.region?"Ausschnitt · "+sizeText(draft.region.w,draft.region.h):fullLabel(src);
+        el("edit-area").hidden=src.type!=="screen";
+        el("edit-text").textContent=draft.region?"Bereich ändern":"Bereich aufziehen";
+      } else if(page==="crop") {
+        el("crop-name").textContent=src.name+" · "+src.detail;
+        el("crop-source-size").textContent=sizeText(src.w,src.h);
+        stage.style.aspectRatio=src.w+" / "+src.h;
+        paint(el("stage-image"),src); renderArea();
+      } else {
+        const choice=page==="preview"?draft:applied;
+        el("review-image").hidden=!choice; el("empty").hidden=!!choice;
+        el("reopen").textContent=page==="preview"?"Zurück":choice?"Quelle ändern":"Quelle auswählen";
+        el("apply-preview").hidden=page!=="preview";
+        el("edit-preview").hidden=page!=="preview" || src.type!=="screen";
+        el("edit-preview-text").textContent=draft.region?"Bereich ändern":"Bereich aufziehen";
+        el("review-name").textContent=choice?sourceById.get(choice.id).name:"Keine Videoquelle gewählt";
+        el("review-detail").textContent="";
+        if(choice) {
+          const selected=sourceById.get(choice.id), r=choice.region;
+          paint(el("review-canvas"),selected,r);
+          el("review-canvas").setAttribute("aria-label","Vorschau von "+selected.name+(r?", gewählter Ausschnitt":""));
+          el("review-detail").textContent=(r?"Ausschnitt":fullLabel(selected))+" · "+sizeText(r?r.w:selected.w,r?r.h:selected.h);
+        }
+      }
+    }
+    function show(next,focus) {
+      page=next; render();
+      if(focus) focus.focus({preventScroll:true});
+      save();
+    }
+    function backToPicker() { area=null; show("picker",cardById.get(draft.id)); }
+    function applyChoice() {
+      applied=copyChoice(draft);
+      show("review",el("reopen"));
+    }
+    function closeView() {
+      if(page==="crop" && cropOrigin==="preview") { area=null; show("preview",el("edit-preview")); }
+      else if(page==="crop" || page==="preview") backToPicker();
+      else if(page==="picker") show("review",el("reopen"));
+    }
+    el("close").addEventListener("click",closeView);
+    el("preview-source").addEventListener("click",() => show("preview",el("reopen")));
+    function editArea() {
+      cropOrigin=page;
+      area=copyRegion(draft.region);
+      show("crop",stage);
+    }
+    el("edit-area").addEventListener("click",editArea);
+    el("edit-preview").addEventListener("click",editArea);
+    el("apply-source").addEventListener("click",applyChoice);
+    el("apply-preview").addEventListener("click",applyChoice);
+    el("apply-area").addEventListener("click",() => {
+      if(!validArea(area)) return;
+      draft.region=copyRegion(area); area=null; applyChoice();
+    });
+    el("full-screen").addEventListener("click",() => {
+      draft.region=null; area=null; applyChoice();
+    });
+    el("redraw").addEventListener("click",() => {
+      area=null; renderArea(); stage.focus({preventScroll:true}); save();
+    });
+    el("reopen").addEventListener("click",() => {
+      if(page==="review") draft=copyChoice(applied) || {id:"screen-one",region:null};
+      backToPicker();
+    });
+    function sourcePoint(event) {
+      const bounds=stage.getBoundingClientRect(), src=currentSource();
+      return {
+        x:Math.round(clamp((event.clientX-bounds.left)/bounds.width,0,1)*src.w),
+        y:Math.round(clamp((event.clientY-bounds.top)/bounds.height,0,1)*src.h)
+      };
+    }
+    function between(a,b) {
+      return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)};
+    }
+    function updateGesture(event) {
+      if(!gesture || gesture.id!==event.pointerId) return;
+      const p=sourcePoint(event), src=currentSource(), g=gesture;
+      if(g.kind==="move") {
+        area={...g.before,x:clamp(g.before.x+p.x-g.start.x,0,src.w-g.before.w),y:clamp(g.before.y+p.y-g.start.y,0,src.h-g.before.h)};
+      } else {
+        area=between(g.anchor,p);
+      }
+      renderArea();
+    }
+    stage.addEventListener("pointerdown",event => {
+      if(page!=="crop" || gesture || event.button!==0 || !event.isPrimary) return;
+      event.preventDefault(); stage.focus({preventScroll:true});
+      const p=sourcePoint(event), before=copyRegion(area);
+      const handle=event.target.closest("[data-handle]")?.dataset.handle;
+      const kind=handle && before?"resize":before && selection.contains(event.target)?"move":"draw";
+      let anchor=p;
+      if(kind==="resize") anchor={x:handle.endsWith("w")?before.x+before.w:before.x,y:handle.startsWith("n")?before.y+before.h:before.y};
+      gesture={id:event.pointerId,kind,start:p,before,anchor};
+      stage.setPointerCapture(event.pointerId);
+      if(kind==="draw") { area=between(p,p); renderArea(); }
+    });
+    stage.addEventListener("pointermove",updateGesture);
+    function endGesture(keep) {
+      if(!gesture) return;
+      const previous=gesture;
+      gesture=null;
+      if(!keep || !validArea(area)) area=previous.before;
+      if(stage.hasPointerCapture(previous.id)) stage.releasePointerCapture(previous.id);
+      renderArea();
+      el("notice").textContent=area?"Markierter Aufnahmebereich "+sizeText(area.w,area.h):"Kein Aufnahmebereich markiert.";
+      if(keep) save();
+    }
+    stage.addEventListener("pointerup",event => {
+      if(gesture?.id!==event.pointerId) return;
+      updateGesture(event); endGesture(true);
+    });
+    stage.addEventListener("pointercancel",event => { if(gesture?.id===event.pointerId) endGesture(false); });
+    stage.addEventListener("lostpointercapture",event => { if(gesture?.id===event.pointerId) endGesture(false); });
+    stage.addEventListener("keydown",event => {
+      if(page!=="crop" || gesture) return;
+      const src=currentSource(), key=event.key;
+      if(key==="Enter" || key===" ") {
+        event.preventDefault();
+        if(!area) area={x:Math.round(src.w/4),y:Math.round(src.h/4),w:Math.round(src.w/2),h:Math.round(src.h/2)};
+      } else if(area && ["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(key)) {
+        event.preventDefault();
+        const dx=key==="ArrowLeft"?-8:key==="ArrowRight"?8:0;
+        const dy=key==="ArrowUp"?-8:key==="ArrowDown"?8:0;
+        if(event.shiftKey) {
+          area.w=clamp(area.w+dx,16,src.w-area.x); area.h=clamp(area.h+dy,16,src.h-area.y);
+        } else {
+          area.x=clamp(area.x+dx,0,src.w-area.w); area.y=clamp(area.y+dy,0,src.h-area.h);
+        }
+      } else return;
+      renderArea(); el("notice").textContent="Markierter Aufnahmebereich "+sizeText(area.w,area.h); save();
+    });
+    root.addEventListener("keydown",event => {
+      if(event.key!=="Escape" || page==="review") return;
+      event.preventDefault();
+      if(gesture) endGesture(false); else closeView();
+    });
+    restore(window.openai?.widgetState); render();
+    window.addEventListener("openai:set_globals",event => {
+      if(restore(event.detail?.globals?.widgetState)) render();
+    });
+    globalThis.lucide?.createIcons?.({attrs:{width:16,height:16}});
+    if(globalThis.Tweak) {
+      const group=el("window-group"), options={layout:"Kacheln"};
+      group.setAttribute("aria-label","Fenstervorschauen");
+      const tweak=new globalThis.Tweak({container:group,onChange:() => {group.dataset.layout=options.layout;}});
+      tweak.addSelect(options,"layout",{label:"Fensterdarstellung",options:["Kacheln","Liste"]});
+    }
+  })();
+  </script>
+</div>
+</body></html>

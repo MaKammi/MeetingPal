@@ -106,41 +106,33 @@ pub unsafe fn create_bgra_frame(
     sample_buffer: &mut cm::SampleBuf,
     display_time: SystemTime,
 ) -> Option<BGRAFrame> {
-    let image_buffer = sample_buffer.image_buf_mut().unwrap();
-
-    unsafe {
-        image_buffer
-            .lock_base_addr(cv::pixel_buffer::LockFlags::DEFAULT)
-            .result()
-            .unwrap()
-    };
-
+    // BGRA is a packed format. CoreVideo's plane accessors are for planar buffers.
+    extern "C" {
+        fn CVPixelBufferGetBaseAddress(buffer: *const cv::PixelBuf) -> *const u8;
+        fn CVPixelBufferGetBytesPerRow(buffer: *const cv::PixelBuf) -> usize;
+    }
+    let image_buffer = sample_buffer.image_buf_mut()?;
     let width = image_buffer.width();
     let height = image_buffer.height();
-
     if width == 0 || height == 0 {
         return None;
     }
-
-    let stride = image_buffer.plane_bytes_per_row(0);
-
-    let mut data: Vec<u8> = vec![];
-
-    let bytes = unsafe {
-        std::slice::from_raw_parts(
-            image_buffer.plane_base_address(0),
-            stride * image_buffer.plane_height(0),
-        )
-    };
-
-    for i in 0..height {
-        let base = i * stride;
-        data.extend_from_slice(&bytes[base as usize..(base + 4 * width) as usize]);
+    let raw = image_buffer as *const cv::PixelBuf;
+    let _lock = image_buffer.base_address_lock(cv::pixel_buffer::LockFlags::READ_ONLY).ok()?;
+    let stride = unsafe { CVPixelBufferGetBytesPerRow(raw) };
+    let address = unsafe { CVPixelBufferGetBaseAddress(raw) };
+    let row_bytes = width.checked_mul(4)?;
+    if address.is_null() || stride < row_bytes {
+        return None;
     }
-
+    let mut data = Vec::with_capacity(row_bytes.checked_mul(height)?);
+    for row in 0..height {
+        let start = row.checked_mul(stride)?;
+        data.extend_from_slice(unsafe { std::slice::from_raw_parts(address.add(start), row_bytes) });
+    }
     Some(BGRAFrame {
         display_time,
-        width: width as i32, // width does not give accurate results - https://stackoverflow.com/questions/19587185/cvpixelbuffergetbytesperrow-for-cvimagebufferref-returns-unexpected-wrong-valu
+        width: width as i32,
         height: height as i32,
         data,
     })

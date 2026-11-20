@@ -86,6 +86,8 @@ pub fn entry() -> anyhow::Result<()> {
                 }
             }
             app.manage(state.clone());
+            #[cfg(target_os = "linux")]
+            app.manage(capture_linux::PortalSources::default());
             jobs::start(state, app.handle().clone());
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
             if let Err(e) = app
@@ -121,6 +123,12 @@ pub fn entry() -> anyhow::Result<()> {
             commands::get_meeting,
             commands::get_jobs,
             commands::capture_sources,
+            commands::capture_source_preview,
+            commands::list_video_sources,
+            #[cfg(target_os = "linux")]
+            capture_linux::select_portal_source,
+            #[cfg(target_os = "linux")]
+            capture_linux::release_portal_source,
             commands::save_settings,
             commands::save_key,
             commands::delete_key,

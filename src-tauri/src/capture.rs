@@ -3,6 +3,7 @@ use crate::{
     storage::{atomic_json, read_json},
 };
 use anyhow::{Context, Result};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -33,6 +34,30 @@ pub struct Source {
     pub kind: String,
     pub width: u32,
     pub height: u32,
+    #[serde(default, rename = "isPrimary")]
+    pub is_primary: bool,
+}
+#[derive(Serialize)]
+pub struct SourcePreview {
+    pub width: u32,
+    pub height: u32,
+    pub image: String,
+}
+
+pub(crate) fn encode_preview(frame: RgbaImage, detail: bool) -> Result<SourcePreview> {
+    let (width, height) = frame.dimensions();
+    anyhow::ensure!(width > 0 && height > 0, "Empty capture frame");
+    let (max_w, max_h) = if detail { (1440, 960) } else { (360, 220) };
+    let picture = image::DynamicImage::ImageRgba8(frame)
+        .thumbnail(width.min(max_w), height.min(max_h))
+        .into_rgb8();
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80).encode_image(&picture)?;
+    Ok(SourcePreview {
+        width,
+        height,
+        image: format!("data:image/jpeg;base64,{}", STANDARD.encode(jpeg)),
+    })
 }
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -117,6 +142,12 @@ impl CaptureBackend for NativeCapture {
 }
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn sources() -> Result<Vec<Source>> {
+    #[cfg(target_os = "macos")]
+    anyhow::ensure!(
+        scap::has_permission(),
+        "Allow screen recording for MeetingPal in System Settings, then refresh the sources."
+    );
+    let primary = scap::get_main_display().id;
     Ok(scap::get_all_targets()
         .into_iter()
         .map(|target| {
@@ -126,6 +157,7 @@ fn sources() -> Result<Vec<Source>> {
                     id: w.id.to_string(),
                     name: w.title,
                     kind: "window".into(),
+                    is_primary: false,
                     width: width as u32,
                     height: height as u32,
                 },
@@ -133,6 +165,7 @@ fn sources() -> Result<Vec<Source>> {
                     id: d.id.to_string(),
                     name: d.title,
                     kind: "screen".into(),
+                    is_primary: d.id == primary,
                     width: width as u32,
                     height: height as u32,
                 },
@@ -147,6 +180,7 @@ fn sources() -> Result<Vec<Source>> {
             id: "portal".into(),
             name: "System screen / window picker".into(),
             kind: "portal".into(),
+            is_primary: false,
             width: 0,
             height: 0,
         }]);
@@ -157,6 +191,7 @@ fn sources() -> Result<Vec<Source>> {
             id: m.id()?.to_string(),
             name: m.name()?,
             kind: "screen".into(),
+            is_primary: m.is_primary().unwrap_or(false),
             width: m.width()?,
             height: m.height()?,
         });
@@ -167,6 +202,7 @@ fn sources() -> Result<Vec<Source>> {
                 id: w.id()?.to_string(),
                 name: w.title()?,
                 kind: "window".into(),
+                is_primary: false,
                 width: w.width()?,
                 height: w.height()?,
             });
@@ -448,18 +484,26 @@ pub fn crop_frame(frame: RgbaImage, crop: Option<&Crop>) -> Result<RgbaImage> {
 #[doc(hidden)]
 pub type SharedFrame = Arc<Mutex<Option<RgbaImage>>>;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-fn capture_frames(
-    selection: VideoSelection,
-    latest: SharedFrame,
-    running: Arc<AtomicBool>,
-) -> Result<()> {
-    if !scap::has_permission() {
-        anyhow::ensure!(
-            scap::request_permission(),
-            "Screen recording permission was not granted."
-        );
-    }
-    let target = scap::get_all_targets()
+fn build_video_capture(
+    selection: &VideoSelection,
+    recording: bool,
+) -> Result<scap::capturer::Capturer> {
+    anyhow::ensure!(
+        scap::has_permission() || (recording && scap::request_permission()),
+        "Screen recording permission was not granted."
+    );
+    let targets = scap::get_all_targets();
+    #[cfg(target_os = "macos")]
+    let excluded = (!recording && selection.kind == VideoKind::Screen).then(|| {
+        targets
+            .iter()
+            .filter(
+                |target| matches!(target, scap::Target::Window(w) if w.owned_by_current_process),
+            )
+            .cloned()
+            .collect()
+    });
+    let target = targets
         .into_iter()
         .find(|t| match t {
             scap::Target::Window(w) => {
@@ -472,43 +516,113 @@ fn capture_frames(
             }
         })
         .ok_or_else(|| anyhow::anyhow!("Selected screen or window is no longer available."))?;
-    let mut capturer = scap::capturer::Capturer::build(scap::capturer::Options {
+    Ok(scap::capturer::Capturer::build(scap::capturer::Options {
         fps: 10,
-        show_cursor: true,
-        show_highlight: true,
+        show_cursor: recording,
+        show_highlight: recording,
         target: Some(target),
+        #[cfg(target_os = "macos")]
+        excluded_targets: excluded,
         output_type: scap::frame::FrameType::BGRAFrame,
         output_resolution: scap::capturer::Resolution::Captured,
         captures_audio: false,
         ..Default::default()
-    })?;
-    capturer.start_capture();
-    while running.load(Ordering::Relaxed) {
-        let frame = capturer.get_next_frame()?;
-        let converted = match frame {
-            scap::frame::Frame::Video(scap::frame::VideoFrame::BGRA(f)) => {
-                let mut bytes = f.data;
-                for p in bytes.chunks_exact_mut(4) {
-                    p.swap(0, 2);
-                }
-                RgbaImage::from_raw(f.width as u32, f.height as u32, bytes)
-            }
-            scap::frame::Frame::Video(scap::frame::VideoFrame::BGR0(f)) => {
-                let mut bytes = f.data;
-                for p in bytes.chunks_exact_mut(4) {
-                    p.swap(0, 2);
-                    p[3] = 255;
-                }
-                RgbaImage::from_raw(f.width as u32, f.height as u32, bytes)
-            }
-            _ => None,
-        };
-        if let Some(frame) = converted {
-            *latest.lock().unwrap() = Some(crop_frame(frame, selection.crop.as_ref())?);
-        }
+    })?)
+}
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn rgba_frame(frame: scap::frame::Frame) -> Option<RgbaImage> {
+    use scap::frame::{Frame, VideoFrame};
+    let (width, height, mut data) = match frame {
+        Frame::Video(VideoFrame::BGRA(f)) => (f.width, f.height, f.data),
+        Frame::Video(VideoFrame::BGR0(f)) => (f.width, f.height, f.data),
+        _ => return None,
+    };
+    if width <= 0 || height <= 0 {
+        return None;
     }
+    for pixel in data.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+        pixel[3] = 255;
+    }
+    RgbaImage::from_raw(width as u32, height as u32, data)
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn capture_frames(
+    selection: VideoSelection,
+    latest: SharedFrame,
+    running: Arc<AtomicBool>,
+) -> Result<()> {
+    let mut capturer = build_video_capture(&selection, true)?;
+    capturer.start_capture();
+    let result = (|| {
+        while running.load(Ordering::Relaxed) {
+            let sample = match capturer.get_next_frame_timeout(Duration::from_millis(200)) {
+                Ok(sample) => sample,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(error) => return Err(error.into()),
+            };
+            if let Some(frame) = rgba_frame(sample) {
+                *latest.lock().unwrap() = Some(crop_frame(frame, selection.crop.as_ref())?);
+            }
+        }
+        Ok(())
+    })();
     capturer.stop_capture();
-    Ok(())
+    result
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub fn source_preview(kind: VideoKind, id: String, detail: bool) -> Result<SourcePreview> {
+    anyhow::ensure!(
+        matches!(kind, VideoKind::Screen | VideoKind::Window),
+        "Unsupported preview source"
+    );
+    let mut capturer = build_video_capture(
+        &VideoSelection {
+            kind,
+            id: Some(id),
+            crop: None,
+        },
+        false,
+    )?;
+    capturer.start_capture();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let frame = loop {
+        match capturer.get_next_frame_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(sample) => {
+                if let Some(frame) = rgba_frame(sample) {
+                    break Ok(frame);
+                }
+            }
+            Err(error) => break Err(error),
+        }
+    };
+    capturer.stop_capture();
+    encode_preview(frame.context("No preview frame received")?, detail)
+}
+
+#[cfg(target_os = "linux")]
+pub fn source_preview(kind: VideoKind, id: String, detail: bool) -> Result<SourcePreview> {
+    anyhow::ensure!(
+        std::env::var("XDG_SESSION_TYPE").as_deref() != Ok("wayland"),
+        "Select the source through the system picker"
+    );
+    let id = id.parse::<u32>()?;
+    let frame = match kind {
+        VideoKind::Window => xcap::Window::all()?
+            .into_iter()
+            .find(|w| w.id().ok() == Some(id))
+            .context("Window unavailable")?
+            .capture_image()?,
+        VideoKind::Screen => xcap::Monitor::all()?
+            .into_iter()
+            .find(|m| m.id().ok() == Some(id))
+            .context("Display unavailable")?
+            .capture_image()?,
+        _ => anyhow::bail!("Unsupported preview source"),
+    };
+    encode_preview(frame, detail)
 }
 #[cfg(target_os = "linux")]
 fn capture_frames(
@@ -834,6 +948,24 @@ pub fn run_worker(spec_path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn thumbnail_retains_source_pixel_dimensions() {
+        let frame = RgbaImage::from_pixel(800, 480, image::Rgba([20, 120, 190, 255]));
+        let preview = encode_preview(frame, false).unwrap();
+        assert_eq!((preview.width, preview.height), (800, 480));
+        let jpeg = STANDARD
+            .decode(
+                preview
+                    .image
+                    .strip_prefix("data:image/jpeg;base64,")
+                    .unwrap(),
+            )
+            .unwrap();
+        let picture = image::load_from_memory(&jpeg).unwrap().to_rgb8();
+        assert_eq!(picture.dimensions(), (360, 216));
+        let [r, g, b] = picture[(100, 100)].0;
+        assert!(r < g && g < b);
+    }
     #[test]
     fn committed_wav_can_be_flushed_and_reopened() {
         let dir = tempfile::tempdir().unwrap();

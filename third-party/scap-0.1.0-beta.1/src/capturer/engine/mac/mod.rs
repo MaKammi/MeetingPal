@@ -219,8 +219,8 @@ pub fn get_output_frame_size(options: &Options) -> [u32; 2] {
 
     // Calculate the output height & width based on the required resolution
     // Output width and height need to be multiplied by scale (or dpi)
-    let mut output_width = (source_rect.size.width as u32) * (scale_factor as u32);
-    let mut output_height = (source_rect.size.height as u32) * (scale_factor as u32);
+    let mut output_width = (source_rect.size.width * scale_factor).round() as u32;
+    let mut output_height = (source_rect.size.height * scale_factor).round() as u32;
     // 1200x800
     match options.output_resolution {
         Resolution::Captured => {}
@@ -338,8 +338,7 @@ pub fn process_sample_buffer(
                         }
                         FrameType::BGRAFrame => {
                             let bgraframe =
-                                pixelformat::create_bgra_frame(sample.as_mut(), frame_system_time)
-                                    .unwrap();
+                                pixelformat::create_bgra_frame(sample.as_mut(), frame_system_time)?;
                             VideoFrame::BGRA(bgraframe)
                         }
                     }));
