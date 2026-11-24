@@ -39,6 +39,15 @@ foreach ($connection in $network) {
     $address = [Net.IPAddress]::Parse($connection.DestAddress)
     if ($address.IsIPv4MappedToIPv6) { $address = $address.MapToIPv4() }
     if (-not [Net.IPAddress]::IsLoopback($address)) {
+        $lookups = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-DNS-Client/Operational'; StartTime=$started} -ErrorAction SilentlyContinue
+        $names = foreach ($lookup in $lookups) {
+            if ($family.Contains([long]$lookup.ProcessId)) {
+                foreach ($field in ([xml]$lookup.ToXml()).Event.EventData.Data) {
+                    if ($field.Name -eq 'QueryName') { $field.'#text' }
+                }
+            }
+        }
+        Write-Output ("DNS names attributed to application processes: " + (($names | Sort-Object -Unique) -join ', '))
         throw "External IP destination observed for $($connection.Application): $address port $($connection.DestPort) (direction $($connection.Direction))"
     }
 }
