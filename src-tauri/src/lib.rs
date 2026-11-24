@@ -71,7 +71,10 @@ pub fn entry() -> anyhow::Result<()> {
         }
         None => (None, None),
     };
+    let launch = std::time::Instant::now();
+    let ready = check.as_ref().map(|_| Arc::new(tokio::sync::Notify::new()));
     let app = tauri::Builder::default()
+        .manage(acceptance::Startup(ready.clone()))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -124,11 +127,23 @@ pub fn entry() -> anyhow::Result<()> {
             #[cfg(target_os = "linux")]
             app.manage(capture_linux::PortalSources::default());
             if let Some((_, mut report, models)) = check {
+                let ready = ready.expect("installed check startup notification");
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    // Include WebView startup and the normal automatic-update decision in the observation.
-                    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                    let result = acceptance::offline(&state, models.is_some()).await;
+                    // Startup is part of the measured product path. Fail if the packaged WebView never bootstraps.
+                    let result = async {
+                        tokio::time::timeout(std::time::Duration::from_secs(60), ready.notified())
+                            .await
+                            .map_err(|_| {
+                                anyhow::anyhow!(
+                                    "Packaged WebView did not bootstrap within 60 seconds"
+                                )
+                            })?;
+                        let startup_ms = launch.elapsed().as_millis();
+                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                        acceptance::offline(&state, models.is_some(), startup_ms).await
+                    }
+                    .await;
                     state.ai.shutdown().await;
                     let code = if result.is_ok() { 0 } else { 1 };
                     let value =

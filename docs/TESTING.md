@@ -74,6 +74,14 @@ Für die Audio-Abnahme dient zusätzlich `--audio-only`. `python scripts/test-me
 
 Der GitHub-Workflow **Installed release acceptance** lädt die Installer des angegebenen Tags, vergleicht SHA-256, prüft mitgelieferte Lizenz- und Quelldateien und startet die installierte Anwendung in einer temporären Bibliothek. Die vorab verifizierten Whisper- und Qwen-Modelle bleiben beim Netzwerktest lokal. Der Test umfasst den WebView-Start, Import des öffentlichen Benchmark-Audios, Wiedergabeaufbereitung, echte lokale Inferenz und PDF-Export. Für jedes Ziel entsteht ein JSON-Bericht mit Laufzeiten. Unter Linux beobachtet `strace` auch die Kindprozesse, unter Windows die Filtering Platform zusammen mit der Prozessüberwachung. macOS verwendet ein Profil mit gesperrtem externem IP-Verkehr. Auf einem eigenen Rechner führt `--check-offline NEUE_BERICHTSDATEI [MODELLORDNER]` denselben Produktdurchlauf aus. Ohne Modellordner entfallen die Inferenzmessungen.
 
+## Zusätzliche Prüfungen für 0.1.3
+
+Die automatisierte Prüfung mit axe-core erstreckt sich auch auf Quellenauswahl, Vorschau, Zuschnitt und die fünf Detailansichten eines bereits verarbeiteten Meetings. Für die Detailansichten prüft Playwright Deutsch und Englisch mit Beispieldaten, einschließlich leerer Ergebnislisten und eines abgeschlossenen Auftrags. Testfälle prüfen die Übersetzung gespeicherter Warnungen sowie den Erhalt von Modell-IDs, HTTP-Fehlercodes und externen Systemmeldungen. Der lokale Whisper-/Qwen-Integrationstest mit dem öffentlichen Audio einschließlich manueller Korrektur und anschließender Meeting-Frage bestand erneut.
+
+Ein synthetisches Video von 123 Sekunden durchlief die echte Gemini-Videopipeline einschließlich Upload, Verarbeitung und Löschung. Die drei übermittelten Clips waren 37.538.907, 38.076.853 und 1.903.975 Byte groß. Für diesen Test fielen 18 Anbieteranfragen an.
+
+Die installierte Version 0.1.3 bestätigt den Start erst nach dem ersten erfolgreichen WebView-Aufruf. Der Paketbericht weist Start, Import, Wiedergabeaufbereitung, Transkription, Inhaltsanalyse und PDF-Export einzeln in Millisekunden aus. Der Release-Workflow startet diese Prüfung mit beiden macOS-Architekturen, Windows, dem Ubuntu-Deb-Paket und dem entpackten AppImage.
+
 ## Lokal nachgewiesen (18. November 2026)
 
 - Windows: Frontend-Build, Unit-Tests und Browser-Interaktion erfolgreich.

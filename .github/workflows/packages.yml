@@ -151,3 +151,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/release.mjs publish
+  installed:
+    needs: publish
+    uses: ./.github/workflows/installed-check.yml
+    with:
+      tag: ${{ github.ref_name }}

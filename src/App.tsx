@@ -41,6 +41,7 @@ import {
 import { api, desktop } from "./api";
 import { VideoSourceField } from "./VideoSourcePicker";
 import { Modal } from "./Modal";
+import { diagnostic } from "./diagnostics";
 import capabilities from "../resources/model-capabilities.json";
 import { useUpdates, updateError } from "./useUpdates";
 import { version as appVersion } from "../package.json";
@@ -243,7 +244,7 @@ function App() {
         <AudioLines size={40} />
         <p>MeetingPal</p>
         {notice ? (
-          <p role="alert">{notice}</p>
+          <p role="alert">{diagnostic(notice, t)}</p>
         ) : (
           <LoaderCircle className="spin" />
         )}
@@ -282,6 +283,7 @@ function App() {
             className={
               page === "library" || page === "meeting" ? "selected" : ""
             }
+            aria-current={page === "library" || page === "meeting" ? "page" : undefined}
             onClick={() => setPage("library")}
           >
             <Library size={19} />
@@ -289,6 +291,7 @@ function App() {
             <span className="nav-count">{meetings.length}</span>
           </button>
           <button
+            aria-current={page === "models" ? "page" : undefined}
             className={page === "models" ? "selected" : ""}
             onClick={() => setPage("models")}
           >
@@ -297,6 +300,7 @@ function App() {
             <span className="tiny-dot" />
           </button>
           <button
+            aria-current={page === "settings" ? "page" : undefined}
             className={page === "settings" ? "selected" : ""}
             onClick={() => setPage("settings")}
           >
@@ -637,7 +641,7 @@ function App() {
       {notice && (
         <div className="toast" role="alert">
           <AlertCircle size={20} />
-          <span>{notice}</span>
+          <span>{diagnostic(notice, t)}</span>
           <button
             className="icon-button"
             aria-label={t("Meldung schließen", "Dismiss notification")}
@@ -673,6 +677,12 @@ function Stat({
 function statusLabel(status: string, t: Translate) {
   const labels: Record<string, [string, string]> = {
     ready: ["Bereit", "Ready"],
+    transcribe: ["Transkription", "Transcription"],
+    finalize: ["Abschließende Auswertung", "Final analysis"],
+    live_analysis: ["Live-Auswertung", "Live analysis"],
+    pending: ["Wartet", "Queued"],
+    running: ["In Arbeit", "Running"],
+    done: ["Abgeschlossen", "Completed"],
     starting: ["Startet …", "Starting …"],
     recording: ["Aufnahme läuft", "Recording"],
     paused: ["Pausiert", "Paused"],
@@ -871,10 +881,10 @@ function ModelPicker({
                 )}
           </button>
         )}
-      {receipt?.key === key && <small role="status">{receipt.text}</small>}
+      {receipt?.key === key && <small role="status">{diagnostic(receipt.text, t)}</small>}
       {error && (
         <small className="error-text" role="alert">
-          {error}
+          {diagnostic(error, t)}
         </small>
       )}
     </div>
@@ -1066,7 +1076,7 @@ function Setup({
                         ?.filter((d) => d.kind === "microphone")
                         .map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.name}
+                            {d.id === "sck-desktop" ? t("Systemton (ScreenCaptureKit)", "System audio (ScreenCaptureKit)") : d.name}
                           </option>
                         ))}
                     </select>
@@ -1089,7 +1099,7 @@ function Setup({
                         ?.filter((d) => d.kind === "desktop")
                         .map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.name}
+                            {d.id === "sck-desktop" ? t("Systemton (ScreenCaptureKit)", "System audio (ScreenCaptureKit)") : d.name}
                           </option>
                         ))}
                     </select>
@@ -1101,7 +1111,7 @@ function Setup({
                   </small>
                 )}
                 {sources.deviceError && (
-                  <small className="error-text">{sources.deviceError}</small>
+                  <small className="error-text">{diagnostic(sources.deviceError, t)}</small>
                 )}
                 <label className="checkbox-row">
                   <input
@@ -1534,7 +1544,7 @@ function ModelsPage({
                   </span>
                 </div>
               )}
-              {p?.error && <small className="error-text">{p.error}</small>}
+              {p?.error && <small className="error-text">{diagnostic(p.error, t)}</small>}
               <div className="model-actions">
                 {downloading ? (
                   <button
@@ -2041,9 +2051,9 @@ function MeetingPage({
         </li>
       ))
     ) : (
-      <p className="muted small">
+      <li className="muted small">
         {t("Bisher nichts festgehalten.", "Nothing captured yet.")}
-      </p>
+      </li>
     );
   const exported = (format: string) =>
     act(async () => {
@@ -2181,7 +2191,7 @@ function MeetingPage({
           </summary>
           <ul>
             {m.warnings.map((warning, i) => (
-              <li key={i}>{warning}</li>
+              <li key={i}>{diagnostic(warning, t)}</li>
             ))}
           </ul>
         </details>
@@ -2267,6 +2277,7 @@ function MeetingPage({
           <button
             className={tab === id ? "active" : ""}
             key={id}
+            aria-pressed={tab === id}
             onClick={() => setTab(id)}
           >
             {label}
@@ -2645,15 +2656,15 @@ function MeetingPage({
             {jobs.slice(-100).map((j) => (
               <div className="job-row" key={j.id}>
                 <span>
-                  {j.kind}
+                  {statusLabel(j.kind, t)}
                   <small>{j.payload}</small>
                 </span>
                 <span
                   className={`badge ${j.state === "done" ? "green" : j.state === "failed" ? "amber" : "neutral"}`}
                 >
-                  {j.state}
+                  {statusLabel(j.state, t)}
                 </span>
-                {j.error && <small className="error-text">{j.error}</small>}
+                {j.error && <small className="error-text">{diagnostic(j.error, t)}</small>}
               </div>
             ))}
           </div>

@@ -9,7 +9,7 @@ import platform
 import plistlib
 import re
 import subprocess
-import sys
+import tarfile
 import tempfile
 import time
 
@@ -55,13 +55,36 @@ def prepare_models(folder):
 
 
 def check_bundle(directory):
+    root = Path(__file__).resolve().parents[1]
+    lock = json.loads((root / "resources/runtimes.json").read_text(encoding="utf8"))
     expected = ["THIRD_PARTY_NOTICES.txt", "MeetingPal-LICENSE.txt", "NotoSans-LICENSE.txt",
-                "DISTRIBUTION-NOTES.md", "ffmpeg-config.mak", "codec-build.json", "runtime-versions.json"]
-    for runtime in ["whisper", "llama", "ffmpeg", "opus", "libvpx"]:
+                "DISTRIBUTION-NOTES.md", "build-codecs.mjs", "ffmpeg-config.mak", "codec-build.json", "runtime-versions.json"]
+    licenses = {"whisper": "LICENSE", "llama": "LICENSE", "ffmpeg": "COPYING.LGPLv2.1", "opus": "COPYING", "libvpx": "LICENSE"}
+    for runtime in licenses:
         expected += [f"{runtime}-source.tar.gz", f"{runtime}-LICENSE.txt"]
     missing = [name for name in expected if not (directory / name).is_file() or not (directory / name).stat().st_size]
     if missing:
         raise RuntimeError(f"Missing installed distribution materials: {missing}")
+    if json.loads((directory / "runtime-versions.json").read_text()) != lock:
+        raise ValueError("The installed runtime manifest differs from the release source")
+    if json.loads((directory / "codec-build.json").read_text())["sources"] != lock["codecs"]:
+        raise ValueError("Codec build records disagree with the release source")
+    actual = (directory / "ffmpeg-config.mak").read_text().splitlines()
+    for flag in ["GPL", "VERSION3", "NONFREE", "NETWORK"]:
+        if f"!CONFIG_{flag}=yes" not in actual or f"CONFIG_{flag}=yes" in actual:
+            raise ValueError(f"The packaged FFmpeg configuration enabled {flag} or lacks its setting")
+    for runtime, license_name in licenses.items():
+        source = (lock.get(runtime) if runtime in ("llama", "whisper") else lock["codecs"][runtime])
+        with tarfile.open(directory / f"{runtime}-source.tar.gz") as archive:
+            if archive.pax_headers.get("comment") != source["commit"]:
+                raise ValueError(f"Wrong upstream revision for {runtime}")
+            upstream = archive.extractfile(license_name).read().splitlines()
+        if (directory / f"{runtime}-LICENSE.txt").read_bytes().splitlines() != upstream:
+            raise ValueError(f"Installed license differs from upstream {runtime}")
+    for name, path in [("MeetingPal-LICENSE.txt", "LICENSE"), ("NotoSans-LICENSE.txt", "resources/NotoSans-LICENSE.txt"),
+                       ("build-codecs.mjs", "scripts/build-codecs.mjs")]:
+        if (directory / name).read_bytes().splitlines() != (root / path).read_bytes().splitlines():
+            raise ValueError(f"Installed file differs from the release source: {name}")
     return len(expected)
 
 
@@ -94,7 +117,12 @@ def main():
             elif system == "Darwin":
                 mounted = temp / "volume"
                 run(["hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mounted, package])
-                app = next(mounted.glob("*.app")) / "Contents"
+                bundle = next(mounted.glob("*.app"))
+                install = temp / bundle.name
+                run(["ditto", bundle, install])
+                run(["hdiutil", "detach", mounted])
+                mounted = None
+                app = install / "Contents"
                 with (app / "Info.plist").open("rb") as file:
                     exe = app / "MacOS" / plistlib.load(file)["CFBundleExecutable"]
                 # The child processes inherit this profile. Network reachability is restricted for the whole run.
@@ -103,11 +131,28 @@ def main():
                 command = ["sandbox-exec", "-p", profile, exe, "--check-offline", report]
                 evidence = "installed macOS app with off-device IP traffic denied"
             else:
-                run(["sudo", "apt-get", "install", "-y", str(package)])
-                name = run(["dpkg-deb", "-f", package, "Package"], capture_output=True, text=True).stdout.strip()
-                files = [Path(line) for line in run(["dpkg-query", "-L", name], capture_output=True, text=True).stdout.splitlines()]
-                exe = next(path for path in files if path.parent == Path("/usr/bin") and path.is_file())
-                materials = next(path.parent for path in files if path.name == "runtime-versions.json")
+                if package.suffix == ".AppImage":
+                    package.chmod(0o755)
+                    # Exercise AppRun from the published image without depending on runner FUSE policy.
+                    run([package, "--appimage-extract"], cwd=temp, stdout=subprocess.DEVNULL)
+                    image = temp / "squashfs-root"
+                    exe = image / "AppRun"
+                    materials = next(image.rglob("runtime-versions.json")).parent
+                    with tarfile.open(package.with_name(f"MeetingPal_{args.version}_AppImage-notices.tar.gz")) as notices:
+                        index = notices.extractfile("SOURCES.txt").read().decode()
+                        if "https://launchpad.net/ubuntu/+source/" not in index or "Additional staged names:" in index:
+                            raise ValueError("AppImage has unaccounted distribution libraries")
+                        for entry in index.splitlines():
+                            if " | " in entry:
+                                owner = entry.split(" | ", 1)[0].replace(":", "-")
+                                if not notices.getmember(f"copyright/{owner}.txt").size:
+                                    raise ValueError(f"Missing AppImage license for {owner}")
+                else:
+                    run(["sudo", "apt-get", "install", "-y", str(package)])
+                    name = run(["dpkg-deb", "-f", package, "Package"], capture_output=True, text=True).stdout.strip()
+                    files = [Path(line) for line in run(["dpkg-query", "-L", name], capture_output=True, text=True).stdout.splitlines()]
+                    exe = next(path for path in files if path.parent == Path("/usr/bin") and path.is_file())
+                    materials = next(path.parent for path in files if path.name == "runtime-versions.json")
                 trace = temp / "network.trace"
                 command = ["xvfb-run", "-a", "dbus-run-session", "--", "strace", "-f", "-s", "256",
                            "-e", "trace=network,execve", "-o", trace, exe, "--check-offline", report]
@@ -118,7 +163,12 @@ def main():
                     command.append(models)
             count = check_bundle(materials)
             started = time.monotonic()
-            run(command)
+            try:
+                run(command)
+            except (subprocess.SubprocessError, OSError):
+                if report.is_file():
+                    print("Application report:", report.read_text(encoding="utf8"), flush=True)
+                raise
             result = json.loads(report.read_text(encoding="utf8"))
             if result.get("version") != args.version or result.get("cloudRequests") != 0:
                 raise RuntimeError(f"Installed product check failed: {result}")

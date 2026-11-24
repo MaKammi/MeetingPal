@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { CropEditor, dimensions, fits } from "./CropEditor";
+import { diagnostic } from "./diagnostics";
 import type {
   Crop,
   MeetingConfig,
@@ -550,7 +551,7 @@ function SourceDialog({
                 )}
                 {error && (
                   <p role="alert" className="error-text">
-                    {error}
+                    {diagnostic(error, t)}
                   </p>
                 )}
                 <div
