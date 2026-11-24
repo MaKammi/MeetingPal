@@ -20,6 +20,7 @@ pub async fn offline(state: &AppState, with_models: bool, startup_ms: u128) -> R
         language: "en".into(),
         ..Default::default()
     };
+    eprintln!("Installed check: importing public fixture");
     let meeting = media::import(&state.store, &state.runtimes, &wav, config).await?;
     let import_ms = started.elapsed().as_millis();
     let playback = Instant::now();
@@ -30,6 +31,7 @@ pub async fn offline(state: &AppState, with_models: bool, startup_ms: u128) -> R
     let mut analysis_ms = None;
     if with_models {
         let start = Instant::now();
+        eprintln!("Installed check: local transcription");
         jobs::refine_transcript(state, &meeting, || {}).await?;
         transcription_ms = Some(start.elapsed().as_millis());
         let current = state.store.load(&meeting.id)?;
@@ -41,6 +43,7 @@ pub async fn offline(state: &AppState, with_models: bool, startup_ms: u128) -> R
             "Offline ASR did not recognize the public fixture"
         );
         let analysis_start = Instant::now();
+        eprintln!("Installed check: local summary");
         let analysis = state.ai.analyze(state, &current, false).await?;
         analysis_ms = Some(analysis_start.elapsed().as_millis());
         ensure!(
@@ -56,6 +59,7 @@ pub async fn offline(state: &AppState, with_models: bool, startup_ms: u128) -> R
     }
     let current = state.store.load(&meeting.id)?;
     let export = Instant::now();
+    eprintln!("Installed check: exporting PDF");
     exports::export(&current, &state.store.root.join("test.pdf"), "pdf")?;
     ensure!(
         current.cloud_requests == 0 && current.config.offline && current.duration_ms >= 10_000,

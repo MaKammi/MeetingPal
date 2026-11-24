@@ -180,7 +180,8 @@ impl Ai {
             local_client: reqwest::Client::builder()
                 .no_proxy()
                 .connect_timeout(Duration::from_secs(5))
-                .timeout(Duration::from_secs(240))
+                // Local inference on an Intel CPU can take several minutes.
+                .timeout(Duration::from_secs(900))
                 .build()?,
             local: Mutex::new(None),
         })
@@ -227,6 +228,9 @@ impl Ai {
                     "-np",
                     "1",
                     "--no-webui",
+                    "--offline",
+                    "--reasoning",
+                    "off",
                 ])
                 .env("LLAMA_API_KEY", &token)
                 .kill_on_drop(true)
@@ -237,8 +241,11 @@ impl Ai {
             if let Some(projector) = state.models.projector(&selection.model)? {
                 cmd.arg("--mmproj").arg(projector);
             }
-            #[cfg(target_os = "macos")]
+            #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             cmd.args(["-ngl", "99"]);
+            // Intel Macs can expose a virtual or unsupported Metal device. Use the CPU path there.
+            #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+            cmd.args(["-ngl", "0"]);
             let child = cmd
                 .spawn()
                 .context("Could not start local language model")?;
@@ -377,6 +384,13 @@ impl Ai {
         .context("The provider returned no usable text. Check the model's capabilities.")?;
         shape.validate(parse_object(text)?)
     }
+    pub async fn cloud_models(
+        &self,
+        secrets: &crate::secrets::Secrets,
+        provider: &Provider,
+    ) -> Result<Vec<crate::cloud_catalog::ListedModel>> {
+        crate::cloud_catalog::load(&self.client, secrets, provider).await
+    }
     pub async fn list_models(&self, state: &AppState, provider: &Provider) -> Result<Vec<String>> {
         if *provider == Provider::Local {
             return Ok(state
@@ -386,44 +400,12 @@ impl Ai {
                 .map(|m| m.id.clone())
                 .collect());
         }
-        let key = state.secrets.get(provider)?;
-        let request = match provider {
-            Provider::Openai => self
-                .client
-                .get("https://api.openai.com/v1/models")
-                .bearer_auth(key),
-            Provider::Anthropic => self
-                .client
-                .get("https://api.anthropic.com/v1/models")
-                .header("x-api-key", key)
-                .header("anthropic-version", "2023-06-01"),
-            Provider::Gemini => self
-                .client
-                .get("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000")
-                .header("x-goog-api-key", key),
-            _ => unreachable!(),
-        };
-        let data = checked_json(request.send().await?).await?;
-        let mut models: Vec<String> = data[if *provider == Provider::Gemini {
-            "models"
-        } else {
-            "data"
-        }]
-        .as_array()
-        .context("No model list returned")?
-        .iter()
-        .filter_map(|m| {
-            m[if *provider == Provider::Gemini {
-                "name"
-            } else {
-                "id"
-            }]
-            .as_str()
-        })
-        .map(|s| s.trim_start_matches("models/").to_string())
-        .collect();
-        models.sort();
-        Ok(models)
+        Ok(self
+            .cloud_models(&state.secrets, provider)
+            .await?
+            .into_iter()
+            .map(|model| model.id)
+            .collect())
     }
     pub async fn answer(
         &self,

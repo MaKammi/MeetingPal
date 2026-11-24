@@ -4,7 +4,11 @@ Meetings, Transkripte und Modelle liegen als normale Dateien im persönlichen Ap
 
 Das lokale Profil verhindert Cloud-Verarbeitung im Backend, auch bei einem manipulierten oder veralteten UI-Zustand. Es gibt keinen Cloud-Fallback. Modellinstallation ist eine ausdrücklich ausgelöste Verbindung zu Hugging Face. Die installierten KI-Laufzeiten arbeiten lokal; die llama.cpp-Verbindung bleibt auf Loopback. Keine Telemetrie, keine Kalender- oder Team-Synchronisierung.
 
+Die Windows-Oberfläche verwendet Microsoft Edge WebView2. Auf dem Windows-Testsystem mit automatischer Proxyerkennung hat WebView2 beim Start eine DNS-Anfrage nach dem Namen `wpad` gesendet. Diese Anfrage dient der Proxyerkennung des Systems und enthält keine Meeting-Inhalte. MeetingPal verändert die systemweite Proxykonfiguration nicht.
+
 Die automatische Prüfung auf Programmupdates ist beim lokalen Standardprofil zunächst aus. Die Einstellung „Auch bei lokaler KI“ erlaubt eine Anfrage an den öffentlichen GitHub-Releasefeed. „Jetzt nach Updates suchen“ löst eine einzelne Anfrage aus. GitHub erhält dabei übliche Verbindungsdaten einschließlich der IP-Adresse. Der Abruf verwendet keine Meeting-Inhalte, API-Schlüssel oder Kontokennung.
+
+Im Cloud-Profil ruft die Modellauswahl mit dem hinterlegten API-Schlüssel die Modellliste des ausgewählten Anbieters ab. Die Liste wird beim Öffnen und während längerer Nutzung aktualisiert. Beim Wechsel zu Gemini-Videoclips aus einem lokalen Meeting erscheint zuerst die Bestätigung für die Cloud-Verarbeitung. Beispiele werden erst über die Schaltfläche zum Modelltest übertragen.
 
 Bei Cloud-Profilen werden die im Aufnahme-Dialog genannten Daten übertragen:
 

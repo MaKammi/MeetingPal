@@ -47,7 +47,9 @@ foreach ($connection in $network) {
                 }
             }
         }
-        Write-Output ("DNS names attributed to application processes: " + (($names | Sort-Object -Unique) -join ', '))
+        $summary = [ordered]@{program=$connection.Application; destination=$address.ToString(); port=$connection.DestPort; dnsNames=@($names | Sort-Object -Unique)}
+        $summary | ConvertTo-Json | Set-Content -LiteralPath ($Report + '.network.json') -Encoding utf8
+        Write-Output ("DNS names attributed to application processes: " + ($summary.dnsNames -join ', '))
         throw "External IP destination observed for $($connection.Application): $address port $($connection.DestPort) (direction $($connection.Direction))"
     }
 }

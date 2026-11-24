@@ -4,6 +4,7 @@ pub mod capture;
 mod capture_linux;
 #[cfg(target_os = "macos")]
 mod capture_mac_audio;
+pub mod cloud_catalog;
 pub mod commands;
 pub mod domain;
 pub mod exports;
@@ -215,6 +216,7 @@ pub fn entry() -> anyhow::Result<()> {
             commands::save_key,
             commands::delete_key,
             commands::provider_models,
+            commands::provider_model_catalog,
             commands::probe_model,
             commands::download_model,
             commands::cancel_download,

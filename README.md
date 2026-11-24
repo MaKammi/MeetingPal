@@ -11,7 +11,7 @@ Desktop-App für lokale Meeting-Aufnahmen und KI-gestützte Protokolle. MeetingP
 - Nachträgliche Verarbeitung, abschnittsweises Live-Transkript und Live-Assistenz. Die Aufnahme läuft in einem eigenen Prozess unabhängig von der KI.
 - Lokale Bibliothek, Tags, Notizen, Zeitmarken, Transkriptbearbeitung und manuelle Sprechernamen.
 - Zusammenfassung, Themen, Entscheidungen, Aufgaben und offene Fragen mit überprüfbaren Quellenverweisen; Fragen zum Meeting.
-- OpenAI für Audio; OpenAI, Anthropic und Gemini für Text/Bilder. Gemini zusätzlich für native Videoclips. Die Modell-ID wird pro Aufgabe gewählt.
+- OpenAI für Audio; OpenAI, Anthropic und Gemini für Text/Bilder. Gemini zusätzlich für native Videoclips. Die Cloud-Modellauswahl lädt beim Öffnen die verfügbare Liste des gewählten Anbieters und zeigt die neuesten passenden Modelle zuerst. Eigene Modell-IDs sind ebenfalls möglich.
 - Integrierter Downloadmanager für Whisper Small/Turbo und Qwen3-Text-/Vision-Modelle; Größen, Lizenzen, SHA-256-Prüfung, Abbruch und Löschung. Lokale Verarbeitung mit gebündeltem whisper.cpp/llama.cpp.
 - Exporte: Markdown, PDF mit eingebetteter Schrift, JSON, SRT und VTT.
 - Schlüssel im Betriebssystem-Schlüsselspeicher; Sitzungs-Fallback. Keine zusätzliche Bibliotheksverschlüsselung und keine Telemetrie.

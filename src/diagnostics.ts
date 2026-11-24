@@ -2,6 +2,9 @@ import type { Translate } from "./types";
 
 // Stored diagnostics retain their original text so old meetings follow the current interface language.
 const german: Record<string, string> = {
+  "Missing model-list cursor": "Der Anbieter hat keine Fortsetzung für die Modellliste geliefert.",
+  "Provider repeated a model-list cursor": "Der Anbieter hat dieselbe Seite der Modellliste erneut geliefert.",
+  "Choose a cloud provider": "Wähle einen Cloud-Anbieter.",
   "Allow screen recording for MeetingPal in System Settings, then refresh the sources.":
     "Erlaube MeetingPal die Bildschirmaufnahme in den Systemeinstellungen und aktualisiere danach die Quellen.",
   "Bundled FFmpeg runtime is missing.":

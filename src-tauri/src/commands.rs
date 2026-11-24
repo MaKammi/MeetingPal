@@ -123,6 +123,17 @@ pub fn delete_key(state: State<'_, Arc<AppState>>, provider: Provider) -> Respon
     state.secrets.delete(&provider).map_err(message)
 }
 #[tauri::command]
+pub async fn provider_model_catalog(
+    state: State<'_, Arc<AppState>>,
+    provider: Provider,
+) -> Response<Vec<crate::cloud_catalog::ListedModel>> {
+    state
+        .ai
+        .cloud_models(&state.secrets, &provider)
+        .await
+        .map_err(message)
+}
+#[tauri::command]
 pub async fn provider_models(
     state: State<'_, Arc<AppState>>,
     provider: Provider,

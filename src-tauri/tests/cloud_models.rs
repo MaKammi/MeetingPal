@@ -27,6 +27,40 @@ async fn probe(provider: Provider, model: &str, task: Task) -> Result<()> {
     Ok(())
 }
 #[tokio::test]
+#[ignore = "discovers live models and probes four provider selections with public or synthetic inputs"]
+async fn newest_available_models() -> Result<()> {
+    let client = reqwest::Client::new();
+    let secrets = Secrets::default();
+    let mut failures = Vec::new();
+    for (provider, tasks) in [
+        (Provider::Gemini, vec![("video", Task::Video)]),
+        (Provider::Anthropic, vec![("text", Task::Text)]),
+        (
+            Provider::Openai,
+            vec![("audio", Task::Audio), ("text", Task::Text)],
+        ),
+    ] {
+        let models = meetingpal_lib::cloud_catalog::load(&client, &secrets, &provider).await?;
+        for (input, task) in tasks {
+            let model = models
+                .iter()
+                .find(|m| m.inputs.contains(&input))
+                .expect("Provider supplied no applicable model");
+            println!("{} {input}: {}", provider.key(), model.id);
+            if let Err(error) = probe(provider.clone(), &model.id, task).await {
+                failures.push(format!(
+                    "{} {input} {}: {error:#}",
+                    provider.key(),
+                    model.id
+                ));
+            }
+        }
+    }
+    anyhow::ensure!(failures.is_empty(), "{}", failures.join("\n"));
+    Ok(())
+}
+
+#[tokio::test]
 #[ignore = "calls a paid provider using the configured MeetingPal key and public test audio"]
 async fn openai_speaker_stream() -> Result<()> {
     probe(Provider::Openai, "gpt-4o-transcribe-diarize", Task::Audio).await

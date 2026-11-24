@@ -14,8 +14,25 @@ import tempfile
 import time
 
 
-def run(args, **kwargs):
-    return subprocess.run([str(arg) for arg in args], check=True, timeout=600, **kwargs)
+def run(args, timeout=600, **kwargs):
+    return subprocess.run([str(arg) for arg in args], check=True, timeout=timeout, **kwargs)
+
+
+def machine_info():
+    system = platform.system()
+    if system == "Darwin":
+        def sysctl(name):
+            return run(["sysctl", "-n", name], capture_output=True, text=True).stdout.strip()
+        cpu, memory = sysctl("machdep.cpu.brand_string"), int(sysctl("hw.memsize"))
+    elif system == "Linux":
+        cpu = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
+                    if line.startswith("model name")), platform.machine())
+        memory = int(re.search(r"MemTotal:\s+(\d+)", Path("/proc/meminfo").read_text())[1]) * 1024
+    else:
+        cpu = os.environ.get("PROCESSOR_IDENTIFIER", platform.machine())
+        memory = int(run(["pwsh", "-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"],
+                         capture_output=True, text=True).stdout.strip())
+    return {"systemVersion": platform.platform(), "cpu": cpu, "memoryBytes": memory, "logicalCpus": os.cpu_count()}
 
 
 def audit_linux(trace):
@@ -46,9 +63,14 @@ def run_macos_observed(command, temp, with_models):
     log = temp / "observer.log"
     tcpdump = ["sudo", "-n", "/usr/sbin/tcpdump"]
     with log.open("wb") as diagnostics:
-        observer = subprocess.Popen(tcpdump + ["-i", "pktap,all", "-nn", "-U", "-s", "80", "-w", str(capture),
-                                               "-Q", f"dir=out and ({senders})", "ip or ip6"],
-                                    stdout=subprocess.DEVNULL, stderr=diagnostics)
+        # sudo may keep a monitor process. Signal the actual tcpdump PID so it flushes the capture.
+        observer = subprocess.Popen(["sudo", "-n", "/bin/sh", "-c", 'echo "$$"; exec "$@"', "observer", "/usr/sbin/tcpdump",
+                                      "-i", "pktap,all", "-nn", "-U", "-s", "80", "-w", str(capture),
+                                      "-Q", f"dir=out and ({senders})", "ip or ip6"],
+                                    stdout=subprocess.PIPE, stderr=diagnostics, text=True)
+        capture_pid = observer.stdout.readline().strip()
+        if not capture_pid.isdecimal():
+            raise RuntimeError("PKTAP observer could not start: " + log.read_text(errors="replace"))
         try:
             for _ in range(100):
                 message = log.read_text(errors="replace")
@@ -59,10 +81,10 @@ def run_macos_observed(command, temp, with_models):
                 time.sleep(0.1)
             else:
                 raise RuntimeError("PKTAP did not become ready")
-            run(command)
+            run(command, timeout=1800)
         finally:
             if observer.poll() is None:
-                run(["sudo", "-n", "kill", "-INT", observer.pid])
+                run(["sudo", "-n", "kill", "-INT", capture_pid])
                 observer.wait(timeout=15)
     local = "(dst net 127.0.0.0/8 or dst host ::1 or dst net ::ffff:127.0.0.0/104)"
     def packet(expression):
@@ -87,6 +109,7 @@ def prepare_models(folder):
             target = directory / item["filename"]
             run(["curl", "--fail", "--silent", "--show-error", "--location", "--retry", "3",
                  "--output", target, item["url"]])
+            print(f"Verifying {item['filename']}", flush=True)
             with target.open("rb") as file:
                 digest = hashlib.file_digest(file, "sha256").hexdigest()
             if digest != item["sha256"] or target.stat().st_size != item["bytes"]:
@@ -199,24 +222,35 @@ def main():
                     command.extend(["-Models", models])
                 else:
                     command.append(models)
+            print(f"Checking distribution materials in {package.name}", flush=True)
             count = check_bundle(materials)
+            print("Starting installed application under network observation", flush=True)
+            system_info = machine_info()
             started = time.monotonic()
             try:
                 if system == "Darwin":
                     evidence = run_macos_observed(command, temp, args.test_ai)
                 else:
-                    run(command)
+                    run(command, timeout=1800)
             except (subprocess.SubprocessError, OSError, RuntimeError):
                 if report.is_file():
-                    print("Application report:", report.read_text(encoding="utf8"), flush=True)
+                    raw = report.read_text(encoding="utf8")
+                    print("Application report:", raw, flush=True)
+                    if raw:
+                        failed = json.loads(raw)
+                        failed.update(**system_info, status="failed", package=package.name,
+                                      distributionFiles=count, launchToExitMs=round((time.monotonic()-started)*1000))
+                        network = Path(str(report) + ".network.json")
+                        if network.is_file():
+                            failed["networkAudit"] = json.loads(network.read_text(encoding="utf-8-sig"))
+                        output.write_text(json.dumps(failed, indent=2) + "\n", encoding="utf8")
                 raise
             result = json.loads(report.read_text(encoding="utf8"))
             if result.get("version") != args.version or result.get("cloudRequests") != 0:
                 raise RuntimeError(f"Installed product check failed: {result}")
             if system == "Linux":
                 evidence = audit_linux(trace)
-            result.update(launchToExitMs=round((time.monotonic() - started) * 1000),
-                          systemVersion=platform.platform(), cpu=os.environ.get("PROCESSOR_IDENTIFIER",platform.machine()),
+            result.update(**system_info, status="passed", launchToExitMs=round((time.monotonic() - started) * 1000),
                           distributionFiles=count, networkEvidence=evidence, package=package.name)
             output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
             print(output.read_text(encoding="utf8"))

@@ -66,6 +66,10 @@ test("English model selection tests only the selected model and restores keyboar
           deviceError: null,
           sourceError: null,
         };
+      if (cmd === "provider_model_catalog") return [
+        { id:"gpt-transcribe", inputs:["audio"] },
+        { id:"gpt-4o-transcribe-diarize", inputs:["audio"] },
+      ];
       if (cmd === "probe_model") {
         probes.push(args);
         return { elapsedMs: 1600, requests: 1 };
@@ -93,7 +97,7 @@ test("English model selection tests only the selected model and restores keyboar
     .selectOption("openai");
   await page
     .getByLabel("Transcription model", { exact: true })
-    .fill("gpt-4o-transcribe-diarize");
+    .selectOption("gpt-4o-transcribe-diarize");
   await expect(page.getByText(/Speakers per section/)).toBeVisible();
   expect(probes).toEqual([]);
   await page
