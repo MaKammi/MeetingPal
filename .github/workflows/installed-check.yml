@@ -1,4 +1,4 @@
-name: Candidate Windows installer acceptance
+name: Candidate Intel Mac installer acceptance
 on:
   workflow_dispatch:
 permissions:
@@ -6,14 +6,8 @@ permissions:
   actions: read
 jobs:
   installed:
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: windows-latest, suffix: x64-setup.exe, network: default }
-          - { os: windows-latest, suffix: x64-setup.exe, network: direct }
+    runs-on: macos-15-intel
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -21,45 +15,18 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - name: Enable process and connection auditing on disposable Windows runner
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          wevtutil sl Microsoft-Windows-DNS-Client/Operational /e:true
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          auditpol /set /subcategory:"Process Creation" /success:enable
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Test Windows without system proxy autodiscovery on a separate disposable runner
-        if: matrix.network == 'direct'
-        shell: pwsh
-        run: |
-          $winhttp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp'
-          if (-not (Test-Path -LiteralPath $winhttp)) { New-Item -Path $winhttp | Out-Null }
-          New-ItemProperty -LiteralPath $winhttp -Name DisableWpad -Value 1 -PropertyType DWord -Force | Out-Null
-          $settings = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-          Set-ItemProperty -LiteralPath $settings -Name AutoDetect -Value 0
-          $connections = Join-Path $settings 'Connections'
-          foreach ($name in 'DefaultConnectionSettings','SavedLegacySettings') {
-            $options = Get-ItemPropertyValue -LiteralPath $connections -Name $name -ErrorAction SilentlyContinue
-            if ($options -and $options.Length -gt 8) {
-              $options[8] = ($options[8] -band 0xf7) -bor 1
-              Set-ItemProperty -LiteralPath $connections -Name $name -Value $options
-            }
-          }
       - name: Verify the exact release candidate and run the installed checks
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 45414536968 --name meetingpal-windows-x64 --dir candidate
+          gh run download 45414536968 --name meetingpal-macos-x64 --dir candidate
           python - <<'PY'
           import hashlib,json,pathlib,subprocess,sys
           root = pathlib.Path("candidate")
           manifest = json.loads((root / "build-info.json").read_text())
           assert manifest["revision"] == "cdcc47167f58a375a8cf01dacf5d8df6c6b5d3a3" and manifest["version"] == "0.1.3"
-          item, = manifest["files"]
+          item, = [entry for entry in manifest["files"] if entry["path"].endswith(".dmg")]
           exe = root / item["path"]
           assert hashlib.file_digest(exe.open("rb"),"sha256").hexdigest() == item["sha256"]
           subprocess.run([sys.executable,"scripts/check-installed.py",str(exe),"acceptance.json","0.1.3","--test-ai"],check=True)
@@ -67,5 +34,5 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: ${{ !cancelled() }}
         with:
-          name: installed-${{ matrix.suffix }}-${{ matrix.network || 'default' }}
+          name: installed-intel-mac
           path: acceptance.json
