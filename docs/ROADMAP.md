@@ -35,8 +35,8 @@
 - [ ] Windows-Herausgebersignatur und macOS-Signatur/Notarisierung sind zurückgestellt.
 - [ ] Distributionsmaterial in den veröffentlichten Paketen prüfen. Der Pakettest gleicht die fünf Quellarchive, die Lizenzen, die Codec-Konfiguration und die AppImage-Bibliotheken mit den Releasequellen ab.
 - [x] Deutsche und englische Oberfläche einschließlich Auftragsstatus und integrierter Fehlermeldungen durchgesehen. Bibliothek, Einstellungen, Modellkatalog, Aufnahme, Quellenauswahl, Zuschnitt und alle fünf Meeting-Detailansichten mit Tastatur und automatisierten WCAG-Prüfungen getestet.
+- [x] Sprachausgabe von Orca für Bibliothek, Suche, Aufnahmedialog und Fokusrückgabe mit dem installierten Ubuntu-Paket auf Deutsch und Englisch geprüft.
 - [ ] Manueller Nutzungstest mit Screenreader auf den Zielgeräten.
-
 - [x] Öffentliche Releases, signierte Programmupdates und manueller oder automatischer Updatecheck mit Offline-Einstellung.
 
 Team-Synchronisierung und Kalenderintegration sind spätere Produktphasen.

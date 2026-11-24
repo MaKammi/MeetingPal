@@ -1,0 +1,42 @@
+name: Spoken interface acceptance
+on:
+  workflow_run:
+    workflows: ["Desktop packages and releases"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published version tag
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  speech:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Install the public release and Orca
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          file="MeetingPal_${TAG#v}_amd64.deb"
+          gh release download "$TAG" -p "$file" -p SHA256SUMS
+          awk -v name="$file" '$2 == name' SHA256SUMS | sha256sum --check --strict
+          sudo apt-get update -qq
+          sudo apt-get install -y "./$file" orca python3-pyatspi openbox xvfb xauth dbus-x11 xdotool pulseaudio speech-dispatcher
+      - name: Read library, search and recording dialog in both languages
+        run: |
+          mkdir -p "$RUNNER_TEMP/orca-session"
+          xvfb-run -a dbus-run-session -- bash -eu -c 'pulseaudio --start --exit-idle-time=-1; /usr/bin/python3 scripts/check-spoken-interface.py "$RUNNER_TEMP/orca-session/speech.log"'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
+        with:
+          name: screenreader-diagnostics
+          path: ${{ runner.temp }}/orca-session/speech.log
+          retention-days: 3
