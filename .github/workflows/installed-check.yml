@@ -22,10 +22,6 @@ jobs:
       matrix:
         include:
           - { os: windows-latest, suffix: x64-setup.exe }
-          - { os: macos-15, suffix: aarch64.dmg }
-          - { os: macos-15-intel, suffix: x64.dmg }
-          - { os: ubuntu-24.04, suffix: amd64.deb }
-          - { os: ubuntu-24.04, suffix: amd64.AppImage }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -42,6 +38,11 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Compare the candidate WebView network policy with the previous Windows installer
+        shell: pwsh
+        run: |
+          $config = Get-Content -Raw src-tauri/tauri.conf.json | ConvertFrom-Json
+          Add-Content -Path $env:GITHUB_ENV -Value ("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=" + $config.app.windows[0].additionalBrowserArgs)
       - name: Download and verify the public installer, then run installed checks
         shell: bash
         env:

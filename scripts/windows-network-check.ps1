@@ -39,7 +39,7 @@ foreach ($connection in $network) {
     $address = [Net.IPAddress]::Parse($connection.DestAddress)
     if ($address.IsIPv4MappedToIPv6) { $address = $address.MapToIPv4() }
     if (-not [Net.IPAddress]::IsLoopback($address)) {
-        throw "External IP destination observed for $($connection.Application): $address"
+        throw "External IP destination observed for $($connection.Application): $address port $($connection.DestPort) (direction $($connection.Direction))"
     }
 }
 Write-Output "Windows Filtering Platform checked $($family.Count) processes and $($network.Count) connections."

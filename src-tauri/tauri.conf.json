@@ -5,7 +5,7 @@
   "identifier": "de.meetingpal.desktop",
   "build": { "beforeDevCommand": "npm run dev", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build && node scripts/build-notices.mjs", "frontendDist": "../dist" },
   "app": {
-    "windows": [{ "label": "main", "title": "MeetingPal", "width": 1320, "height": 900, "minWidth": 960, "minHeight": 640 }],
+    "windows": [{ "label": "main", "title": "MeetingPal", "width": 1320, "height": 900, "minWidth": 960, "minHeight": 640, "additionalBrowserArgs": "--disable-background-networking --disable-component-update --disable-domain-reliability --no-pings --no-proxy-server --host-resolver-rules=\"MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE *.localhost\" --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,MediaRouter,OptimizationHints" }],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost blob:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'",
       "assetProtocol": { "enable": true, "scope": ["$APPDATA/meetings/**", "$APPLOCALDATA/meetings/**"] }
