@@ -41,8 +41,10 @@ import {
 import { api, desktop } from "./api";
 import { VideoSourceField } from "./VideoSourcePicker";
 import { Modal } from "./Modal";
+import { diagnostic } from "./diagnostics";
 import capabilities from "../resources/model-capabilities.json";
 import { useUpdates, updateError } from "./useUpdates";
+import { cloudKeyChanged, useCloudModels } from "./useCloudModels";
 import { version as appVersion } from "../package.json";
 import { bytes, defaultConfig, disclosure, duration } from "./types";
 import type {
@@ -243,7 +245,7 @@ function App() {
         <AudioLines size={40} />
         <p>MeetingPal</p>
         {notice ? (
-          <p role="alert">{notice}</p>
+          <p role="alert">{diagnostic(notice, t)}</p>
         ) : (
           <LoaderCircle className="spin" />
         )}
@@ -282,6 +284,7 @@ function App() {
             className={
               page === "library" || page === "meeting" ? "selected" : ""
             }
+            aria-current={page === "library" || page === "meeting" ? "page" : undefined}
             onClick={() => setPage("library")}
           >
             <Library size={19} />
@@ -289,6 +292,7 @@ function App() {
             <span className="nav-count">{meetings.length}</span>
           </button>
           <button
+            aria-current={page === "models" ? "page" : undefined}
             className={page === "models" ? "selected" : ""}
             onClick={() => setPage("models")}
           >
@@ -297,6 +301,7 @@ function App() {
             <span className="tiny-dot" />
           </button>
           <button
+            aria-current={page === "settings" ? "page" : undefined}
             className={page === "settings" ? "selected" : ""}
             onClick={() => setPage("settings")}
           >
@@ -637,7 +642,7 @@ function App() {
       {notice && (
         <div className="toast" role="alert">
           <AlertCircle size={20} />
-          <span>{notice}</span>
+          <span>{diagnostic(notice, t)}</span>
           <button
             className="icon-button"
             aria-label={t("Meldung schließen", "Dismiss notification")}
@@ -673,6 +678,12 @@ function Stat({
 function statusLabel(status: string, t: Translate) {
   const labels: Record<string, [string, string]> = {
     ready: ["Bereit", "Ready"],
+    transcribe: ["Transkription", "Transcription"],
+    finalize: ["Abschließende Auswertung", "Final analysis"],
+    live_analysis: ["Live-Auswertung", "Live analysis"],
+    pending: ["Wartet", "Queued"],
+    running: ["In Arbeit", "Running"],
+    done: ["Abgeschlossen", "Completed"],
     starting: ["Startet …", "Starting …"],
     recording: ["Aufnahme läuft", "Recording"],
     paused: ["Pausiert", "Paused"],
@@ -705,9 +716,8 @@ function ModelPicker({
   task: string;
   t: Translate;
 }) {
-  const [models, setModels] = useState<string[]>([]);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const {models, error, loading, refresh} = useCloudModels(value.provider, online);
+  const [manualProvider, setManualProvider] = useState<Provider | null>(null);
   const [probing, setProbing] = useState(false);
   const [receipt, setReceipt] = useState<{ key: string; text: string } | null>(
     null,
@@ -723,7 +733,7 @@ function ModelPicker({
   const features =
     capabilities.find(
       (m) => m.provider === value.provider && m.model === value.model,
-    )?.features ?? [];
+    )?.features ?? models.find(m => m.id === value.model)?.inputs ?? [];
   const featureNames: Record<string, string> = {
     audio: t("Transkription", "Transcription"),
     text: t("Text", "Text"),
@@ -733,9 +743,12 @@ function ModelPicker({
     speakerLabels: t("Sprecher pro Abschnitt", "Speakers per section"),
     audioStream: t("Live-Vorschau", "Streaming preview"),
   };
-  const suggestions = capabilities
-    .filter((m) => m.provider === value.provider && m.features.includes(input))
-    .map((m) => m.model);
+  const suggestions = models.filter(model => model.inputs.includes(input));
+  const first = suggestions[0]?.id;
+  const manual = manualProvider === value.provider;
+  useEffect(() => {
+    if (online && !loading && !error && !manual && !value.model && first) onChange({provider: value.provider, model: first});
+  }, [online, loading, error, manual, value.provider, value.model, first, onChange]);
   const providers: Provider[] = nativeVideo
     ? ["gemini"]
     : task.endsWith("transcription")
@@ -755,8 +768,8 @@ function ModelPicker({
           value={value.provider}
           onChange={(e) => {
             const provider = e.target.value as Provider;
-            setModels([]);
-            setError("");
+            setManualProvider(null);
+            setReceipt(null);
             onChange({ provider, model: provider === "local" ? local[0] : "" });
           }}
         >
@@ -780,40 +793,63 @@ function ModelPicker({
           </select>
         ) : (
           <>
-            <input
-              aria-label={`${label} ${t("Modell", "model")}`}
-              value={value.model}
-              list={`models-${task}`}
-              placeholder={t("Modell-ID auswählen", "Choose model ID")}
-              onChange={(e) => onChange({ ...value, model: e.target.value })}
-            />
-            <datalist id={`models-${task}`}>
-              {Array.from(new Set([...suggestions, ...models])).map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
+            {suggestions.length > 0 && !manual ? (
+              <select
+                aria-label={`${label} ${t("Modell", "model")}`}
+                value={value.model || first}
+                onChange={(e) => {
+                  if (e.target.value === "__custom") {
+                    setManualProvider(value.provider);
+                    onChange({ ...value, model: "" });
+                  } else onChange({ ...value, model: e.target.value });
+                }}
+              >
+                {suggestions.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
+                ))}
+                {value.model &&
+                  !suggestions.some((m) => m.id === value.model) && (
+                    <option value={value.model}>
+                      {value.model} ·{" "}
+                      {t("Gespeicherte Auswahl", "Saved selection")}
+                    </option>
+                  )}
+                <option value="__custom">
+                  {t("Eigene Modell-ID eingeben …", "Enter a custom model ID…")}
+                </option>
+              </select>
+            ) : (
+              <input
+                aria-label={`${label} ${t("Modell", "model")}`}
+                value={value.model}
+                placeholder={
+                  loading
+                    ? t("Modelle werden geladen …", "Loading models…")
+                    : t("Modell-ID eingeben", "Enter model ID")
+                }
+                onChange={(e) => {
+                  setManualProvider(value.provider);
+                  onChange({ ...value, model: e.target.value });
+                }}
+              />
+            )}
+            {manual && suggestions.length > 0 && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setManualProvider(null)}
+              >
+                {t("Zur Liste", "Show list")}
+              </button>
+            )}
             <button
               type="button"
               className="icon-button"
               title={t("Modelle vom Anbieter laden", "Load provider models")}
               disabled={loading || !online}
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  const list = await api<string[]>("provider_models", {
-                    provider: value.provider,
-                  });
-                  setModels(
-                    task.endsWith("transcription")
-                      ? list.filter((s) => /transcribe|whisper/.test(s))
-                      : list,
-                  );
-                } catch (e) {
-                  setError(String(e));
-                } finally {
-                  setLoading(false);
-                }
-              }}
+              onClick={refresh}
             >
               {loading ? (
                 <LoaderCircle size={16} className="spin" />
@@ -871,10 +907,12 @@ function ModelPicker({
                 )}
           </button>
         )}
-      {receipt?.key === key && <small role="status">{receipt.text}</small>}
+      {receipt?.key === key && (
+        <small role="status">{diagnostic(receipt.text, t)}</small>
+      )}
       {error && (
         <small className="error-text" role="alert">
-          {error}
+          {diagnostic(error, t)}
         </small>
       )}
     </div>
@@ -914,6 +952,14 @@ function Setup({
         }
       : {}),
   }));
+  const [confirmGemini, setConfirmGemini] = useState(false);
+  function selectGeminiVideo() {
+    setC((current) => ({
+      ...current, offline: false, videoAnalysis: "native",
+      vision: current.vision.provider === "gemini" ? current.vision : {provider: "gemini", model: ""},
+    }));
+    setConfirmGemini(false);
+  }
   const [sources, setSources] = useState<Sources>({
     devices: [],
     sources: [],
@@ -1066,7 +1112,7 @@ function Setup({
                         ?.filter((d) => d.kind === "microphone")
                         .map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.name}
+                            {d.id === "sck-desktop" ? t("Systemton (ScreenCaptureKit)", "System audio (ScreenCaptureKit)") : d.name}
                           </option>
                         ))}
                     </select>
@@ -1089,7 +1135,7 @@ function Setup({
                         ?.filter((d) => d.kind === "desktop")
                         .map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.name}
+                            {d.id === "sck-desktop" ? t("Systemton (ScreenCaptureKit)", "System audio (ScreenCaptureKit)") : d.name}
                           </option>
                         ))}
                     </select>
@@ -1101,7 +1147,7 @@ function Setup({
                   </small>
                 )}
                 {sources.deviceError && (
-                  <small className="error-text">{sources.deviceError}</small>
+                  <small className="error-text">{diagnostic(sources.deviceError, t)}</small>
                 )}
                 <label className="checkbox-row">
                   <input
@@ -1229,13 +1275,13 @@ function Setup({
                   {t("Visuelle Auswertung", "Visual analysis")}
                   <select
                     value={c.videoAnalysis}
-                    onChange={(e) =>
-                      patch({
-                        videoAnalysis: e.target.value as MeetingConfig["videoAnalysis"],
-                        ...(e.target.value === "native" && c.vision.provider !== "gemini"
-                          ? {vision: {provider: "gemini" as const, model: ""}} : {}),
-                      })
-                    }
+                    onChange={(e) => {
+                      const mode = e.target.value as MeetingConfig["videoAnalysis"];
+                      if (mode === "native") {
+                        if (c.offline) setConfirmGemini(true);
+                        else selectGeminiVideo();
+                      } else patch({videoAnalysis: mode});
+                    }}
                   >
                     <option value="none">
                       {t("Nur den Ton auswerten", "Analyze audio only")}
@@ -1246,7 +1292,7 @@ function Setup({
                         "Include selected frames",
                       )}
                     </option>
-                    <option value="native" disabled={c.offline}>
+                    <option value="native">
                       {t(
                         "Videoclips mit Ton · Gemini",
                         "Video clips with audio · Gemini",
@@ -1375,6 +1421,19 @@ function Setup({
             </p>
           </aside>
         </div>
+        {confirmGemini && (
+          <Modal className="confirm-modal" labelledBy="gemini-video-title" onClose={() => setConfirmGemini(false)}>
+            <h2 id="gemini-video-title">{t("Gemini für dieses Meeting verwenden?", "Use Gemini for this meeting?")}</h2>
+            <p>{t(
+              "Beim Start der Auswertung sendet MeetingPal die ausgewählten Videoclips einschließlich Ton an Google Gemini. Dafür wird die Cloud-Verarbeitung für dieses Meeting aktiviert.",
+              "When analysis starts, MeetingPal sends the selected video clips, including audio, to Google Gemini. This enables cloud processing for this meeting.",
+            )}</p>
+            <div className="field-row">
+              <button className="secondary" onClick={() => setConfirmGemini(false)}>{t("Lokal bleiben", "Stay offline")}</button>
+              <button className="primary" onClick={selectGeminiVideo}>{t("Gemini verwenden", "Use Gemini")}</button>
+            </div>
+          </Modal>
+        )}
         <footer className="modal-footer">
           <label className="checkbox-row consent">
             <input
@@ -1534,7 +1593,7 @@ function ModelsPage({
                   </span>
                 </div>
               )}
-              {p?.error && <small className="error-text">{p.error}</small>}
+              {p?.error && <small className="error-text">{diagnostic(p.error, t)}</small>}
               <div className="model-actions">
                 {downloading ? (
                   <button
@@ -1700,6 +1759,7 @@ function SettingsPage({
                         provider,
                         key: keys[provider],
                       });
+                      cloudKeyChanged(provider);
                       setKeys((k) => ({ ...k, [provider]: "" }));
                       notify(
                         stored
@@ -1725,6 +1785,7 @@ function SettingsPage({
                     onClick={() =>
                       act(async () => {
                         await api("delete_key", { provider });
+                        cloudKeyChanged(provider);
                         await onSaved();
                       })
                     }
@@ -1833,10 +1894,10 @@ function SettingsPage({
             online={!settings.defaultConfig.offline}
             value={settings.defaultConfig.transcription}
             onChange={(transcription) =>
-              setSettings({
-                ...settings,
-                defaultConfig: { ...settings.defaultConfig, transcription },
-              })
+              setSettings(current => ({
+                ...current,
+                defaultConfig: { ...current.defaultConfig, transcription },
+              }))
             }
             t={t}
           />
@@ -1846,10 +1907,10 @@ function SettingsPage({
             online={!settings.defaultConfig.offline}
             value={settings.defaultConfig.analysis}
             onChange={(analysis) =>
-              setSettings({
-                ...settings,
-                defaultConfig: { ...settings.defaultConfig, analysis },
-              })
+              setSettings(current => ({
+                ...current,
+                defaultConfig: { ...current.defaultConfig, analysis },
+              }))
             }
             t={t}
           />
@@ -2041,9 +2102,9 @@ function MeetingPage({
         </li>
       ))
     ) : (
-      <p className="muted small">
+      <li className="muted small">
         {t("Bisher nichts festgehalten.", "Nothing captured yet.")}
-      </p>
+      </li>
     );
   const exported = (format: string) =>
     act(async () => {
@@ -2181,7 +2242,7 @@ function MeetingPage({
           </summary>
           <ul>
             {m.warnings.map((warning, i) => (
-              <li key={i}>{warning}</li>
+              <li key={i}>{diagnostic(warning, t)}</li>
             ))}
           </ul>
         </details>
@@ -2267,6 +2328,7 @@ function MeetingPage({
           <button
             className={tab === id ? "active" : ""}
             key={id}
+            aria-pressed={tab === id}
             onClick={() => setTab(id)}
           >
             {label}
@@ -2645,15 +2707,15 @@ function MeetingPage({
             {jobs.slice(-100).map((j) => (
               <div className="job-row" key={j.id}>
                 <span>
-                  {j.kind}
+                  {statusLabel(j.kind, t)}
                   <small>{j.payload}</small>
                 </span>
                 <span
                   className={`badge ${j.state === "done" ? "green" : j.state === "failed" ? "amber" : "neutral"}`}
                 >
-                  {j.state}
+                  {statusLabel(j.state, t)}
                 </span>
-                {j.error && <small className="error-text">{j.error}</small>}
+                {j.error && <small className="error-text">{diagnostic(j.error, t)}</small>}
               </div>
             ))}
           </div>

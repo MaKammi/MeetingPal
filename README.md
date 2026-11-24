@@ -11,7 +11,7 @@ Desktop-App für lokale Meeting-Aufnahmen und KI-gestützte Protokolle. MeetingP
 - Nachträgliche Verarbeitung, abschnittsweises Live-Transkript und Live-Assistenz. Die Aufnahme läuft in einem eigenen Prozess unabhängig von der KI.
 - Lokale Bibliothek, Tags, Notizen, Zeitmarken, Transkriptbearbeitung und manuelle Sprechernamen.
 - Zusammenfassung, Themen, Entscheidungen, Aufgaben und offene Fragen mit überprüfbaren Quellenverweisen; Fragen zum Meeting.
-- OpenAI für Audio; OpenAI, Anthropic und Gemini für Text/Bilder. Gemini zusätzlich für native Videoclips. Die Modell-ID wird pro Aufgabe gewählt.
+- OpenAI für Audio; OpenAI, Anthropic und Gemini für Text/Bilder. Gemini zusätzlich für native Videoclips. Die Cloud-Modellauswahl lädt beim Öffnen die verfügbare Liste des gewählten Anbieters und zeigt die neuesten passenden Modelle zuerst. Eigene Modell-IDs sind ebenfalls möglich.
 - Integrierter Downloadmanager für Whisper Small/Turbo und Qwen3-Text-/Vision-Modelle; Größen, Lizenzen, SHA-256-Prüfung, Abbruch und Löschung. Lokale Verarbeitung mit gebündeltem whisper.cpp/llama.cpp.
 - Exporte: Markdown, PDF mit eingebetteter Schrift, JSON, SRT und VTT.
 - Schlüssel im Betriebssystem-Schlüsselspeicher; Sitzungs-Fallback. Keine zusätzliche Bibliotheksverschlüsselung und keine Telemetrie.
@@ -53,7 +53,7 @@ Bibliothek und Modelle liegen im App-Datenverzeichnis `de.meetingpal.desktop`; d
 
 Entwicklungsziele: Windows 11 x64; macOS ab 14.2 auf Intel/Apple Silicon; Ubuntu 24.04 x64 mit GNOME auf Wayland/X11. Unter Wayland entscheidet die Systemfreigabe über Bildschirm/Fenster. Auf macOS benötigt auch Desktop-Ton die ScreenCaptureKit-Freigabe; Systemton umfasst alle Apps.
 
-Windows verwendet den x64-Installer, macOS eine `.dmg` für Apple Silicon (`aarch64`) oder Intel (`x64`), Ubuntu ein `.deb` oder eine `.AppImage`. Nutzer von 0.1.0 installieren die öffentliche Version einmal manuell. Die lokale Bibliothek wird weiterverwendet.
+Windows verwendet den x64-Installer, macOS eine `.dmg` für Apple Silicon (`aarch64`) oder Intel (`x64`), Ubuntu ein `.deb` oder eine `.AppImage`. Das AppImage verwendet PipeWire, ALSA und die Desktop-Bibliotheken von Ubuntu 24.04 GNOME. Auf einer Minimalinstallation zieht das Deb-Paket die benötigten Laufzeitbibliotheken automatisch nach. Nutzer von 0.1.0 installieren die öffentliche Version einmal manuell. Die lokale Bibliothek wird weiterverwendet.
 
 Ab 0.1.1 prüft die App beim Start und bei längerem Betrieb täglich auf Updates, wenn das Standardprofil Onlinezugriff erlaubt. Unter **Einstellungen → Programmupdates** lässt sich die Suche auch bei lokaler KI erlauben oder auf manuell stellen. **Jetzt nach Updates suchen** verbindet sich ausdrücklich mit GitHub. Nach Bestätigung lädt die App das passende signierte Paket und startet neu. Während einer Aufnahme oder laufenden Verarbeitung lässt sich kein Update installieren.
 

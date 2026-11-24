@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { defaultConfig, type MeetingConfig, type Source } from "../src/types";
 
 const monitor: Source = {
@@ -110,6 +111,47 @@ async function setup(page: Page, initial = [monitor, notes]) {
   await page.getByRole("button", { name: "Quelle auswählen" }).click();
   return backend;
 }
+
+test("source selection, preview and crop are accessible by keyboard and screen reader", async ({
+  page,
+}) => {
+  test.setTimeout(75000);
+  await setup(page);
+  const findings: string[] = [];
+  const audit = async () => {
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .analyze();
+    for (const issue of violations)
+      for (const node of issue.nodes)
+        findings.push(
+          [
+            issue.id,
+            node.target.join(" "),
+            ...node.any.map((check) => check.message),
+          ].join(" | "),
+        );
+  };
+  await page
+    .getByRole("region", { name: "Bildschirme" })
+    .getByRole("radio")
+    .check();
+  await audit();
+  await page.getByRole("button", { name: "Vorschau", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Quellenvorschau" }),
+  ).toBeVisible();
+  await audit();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Bereich aufziehen" }).click();
+  const stage = page.getByRole("button", {
+    name: "Aufnahmebereich in der Bildschirmvorschau auswählen",
+  });
+  await stage.focus();
+  await page.keyboard.press("Enter");
+  await audit();
+  expect(findings).toEqual([]);
+});
 
 for (const [orientation, screen] of [
   ["landscape", monitor],

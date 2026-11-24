@@ -4,6 +4,7 @@ pub mod capture;
 mod capture_linux;
 #[cfg(target_os = "macos")]
 mod capture_mac_audio;
+pub mod cloud_catalog;
 pub mod commands;
 pub mod domain;
 pub mod exports;
@@ -47,31 +48,49 @@ pub fn entry() -> anyhow::Result<()> {
         }
         return result;
     }
-    // A separate, temporary library keeps installed-package checks away from user meetings.
-    let check = if args.get(1).is_some_and(|arg| arg == "--check-offline") {
+    // The supervising process owns this temporary directory. All WebView and SQLite
+    // handles in the installed product have closed before Windows removes the files.
+    if args.get(1).is_some_and(|arg| arg == "--check-offline") {
         anyhow::ensure!(
             (3..=4).contains(&args.len()),
             "Usage: --check-offline NEW_REPORT_PATH [INSTALLED_MODELS_DIRECTORY]"
         );
-        Some((
-            tempfile::tempdir()?,
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&args[2])?,
-            args.get(3).map(std::path::PathBuf::from),
-        ))
+        let directory = tempfile::tempdir()?;
+        let status = std::process::Command::new(tauri::utils::platform::current_exe()?)
+            .arg("--check-offline-worker")
+            .arg(directory.path().join("library"))
+            .args(&args[2..])
+            .status()?;
+        directory.close()?;
+        anyhow::ensure!(
+            status.success(),
+            "Installed offline check failed ({status})"
+        );
+        return Ok(());
+    }
+    let check = if args
+        .get(1)
+        .is_some_and(|arg| arg == "--check-offline-worker")
+    {
+        anyhow::ensure!(
+            (4..=5).contains(&args.len()),
+            "Missing installed-check arguments"
+        );
+        let root = std::path::PathBuf::from(&args[2]);
+        std::fs::create_dir(&root)?;
+        let report = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&args[3])?;
+        Some((root, report, args.get(4).map(std::path::PathBuf::from)))
     } else {
         None
     };
-    let (library, check) = match check {
-        Some((directory, report, models)) => {
-            let root = directory.path().to_owned();
-            (Some(directory), Some((root, report, models)))
-        }
-        None => (None, None),
-    };
+    let checking = check.is_some();
+    let launch = std::time::Instant::now();
+    let ready = check.as_ref().map(|_| Arc::new(tokio::sync::Notify::new()));
     let app = tauri::Builder::default()
+        .manage(acceptance::Startup(ready.clone()))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -124,11 +143,23 @@ pub fn entry() -> anyhow::Result<()> {
             #[cfg(target_os = "linux")]
             app.manage(capture_linux::PortalSources::default());
             if let Some((_, mut report, models)) = check {
+                let ready = ready.expect("installed check startup notification");
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    // Include WebView startup and the normal automatic-update decision in the observation.
-                    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-                    let result = acceptance::offline(&state, models.is_some()).await;
+                    // Startup is part of the measured product path. Fail if the packaged WebView never bootstraps.
+                    let result = async {
+                        tokio::time::timeout(std::time::Duration::from_secs(60), ready.notified())
+                            .await
+                            .map_err(|_| {
+                                anyhow::anyhow!(
+                                    "Packaged WebView did not bootstrap within 60 seconds"
+                                )
+                            })?;
+                        let startup_ms = launch.elapsed().as_millis();
+                        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                        acceptance::offline(&state, models.is_some(), startup_ms).await
+                    }
+                    .await;
                     state.ai.shutdown().await;
                     let code = if result.is_ok() { 0 } else { 1 };
                     let value =
@@ -185,6 +216,7 @@ pub fn entry() -> anyhow::Result<()> {
             commands::save_key,
             commands::delete_key,
             commands::provider_models,
+            commands::provider_model_catalog,
             commands::probe_model,
             commands::download_model,
             commands::cancel_download,
@@ -205,9 +237,8 @@ pub fn entry() -> anyhow::Result<()> {
             commands::export_meeting
         ])
         .build(tauri::generate_context!())?;
-    if let Some(library) = library {
+    if checking {
         let code = app.run_return(|_, _| {});
-        library.close()?;
         anyhow::ensure!(code == 0, "Installed offline check failed");
     } else {
         app.run(|_, _| {});

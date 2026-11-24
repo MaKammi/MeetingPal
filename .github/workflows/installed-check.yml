@@ -1,5 +1,8 @@
 name: Installed release acceptance
 on:
+  workflow_run:
+    workflows: ["Desktop packages and releases"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -10,42 +13,75 @@ permissions:
   contents: read
 jobs:
   installed:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v'))
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, suffix: x64-setup.exe }
-          - { os: macos-15, suffix: aarch64.dmg }
+          - { os: windows-latest, suffix: x64-setup.exe, network: default }
+          - { os: windows-latest, suffix: x64-setup.exe, network: direct }
+          - { os: macos-26, suffix: aarch64.dmg }
           - { os: macos-15-intel, suffix: x64.dmg }
           - { os: ubuntu-24.04, suffix: amd64.deb }
+          - { os: ubuntu-24.04, suffix: amd64.AppImage }
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
       - name: Install tracing and display tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y strace xvfb xauth dbus-x11
+        run: sudo apt-get update && sudo apt-get install -y strace xvfb xauth dbus-x11 libpipewire-0.3-0 libasound2t64 libwebkit2gtk-4.1-0 libayatana-appindicator3-1
       - name: Enable process and connection auditing on disposable Windows runner
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          wevtutil sl Microsoft-Windows-DNS-Client/Operational /e:true
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           auditpol /set /subcategory:"Process Creation" /success:enable
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Test Windows without system proxy autodiscovery on a separate disposable runner
+        if: matrix.network == 'direct'
+        shell: pwsh
+        run: |
+          $winhttp = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp'
+          if (-not (Test-Path -LiteralPath $winhttp)) { New-Item -Path $winhttp | Out-Null }
+          New-ItemProperty -LiteralPath $winhttp -Name DisableWpad -Value 1 -PropertyType DWord -Force | Out-Null
+          $settings = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+          Set-ItemProperty -LiteralPath $settings -Name AutoDetect -Value 0
+          $connections = Join-Path $settings 'Connections'
+          foreach ($name in 'DefaultConnectionSettings','SavedLegacySettings') {
+            $options = Get-ItemPropertyValue -LiteralPath $connections -Name $name -ErrorAction SilentlyContinue
+            if ($options -and $options.Length -gt 8) {
+              $options[8] = ($options[8] -band 0xf7) -bor 1
+              Set-ItemProperty -LiteralPath $connections -Name $name -Value $options
+            }
+          }
       - name: Download and verify the public installer, then run installed checks
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
           SUFFIX: ${{ matrix.suffix }}
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           file="MeetingPal_${TAG#v}_$SUFFIX"
-          gh release download "$TAG" --pattern "$file" --pattern SHA256SUMS
-          python -c "import hashlib, pathlib, sys; p=pathlib.Path(sys.argv[1]); expected=dict(line.strip().split('  ',1)[::-1] for line in pathlib.Path('SHA256SUMS').read_text().splitlines()); assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()==expected[p.name]" "$file"
+          files=("$file")
+          if [[ "$SUFFIX" == "amd64.AppImage" ]]; then files+=("MeetingPal_${TAG#v}_AppImage-notices.tar.gz"); fi
+          gh release download "$TAG" --pattern SHA256SUMS
+          for asset in "${files[@]}"; do
+            gh release download "$TAG" --pattern "$asset"
+            python -c "import hashlib, pathlib, sys; p=pathlib.Path(sys.argv[1]); expected=dict(line.strip().split('  ',1)[::-1] for line in pathlib.Path('SHA256SUMS').read_text().splitlines()); assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()==expected[p.name]" "$asset"
+          done
           python scripts/check-installed.py "$file" acceptance.json "${TAG#v}" --test-ai
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ !cancelled() }}
         with:
-          name: installed-${{ matrix.os }}
+          name: installed-${{ matrix.suffix }}-${{ matrix.network || 'default' }}
           path: acceptance.json

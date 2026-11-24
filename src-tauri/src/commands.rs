@@ -18,10 +18,13 @@ fn changed(app: &tauri::AppHandle, id: &str) {
     let _ = app.emit("meeting-changed", id);
 }
 #[tauri::command]
-pub async fn bootstrap(state: State<'_, Arc<AppState>>) -> Response<Value> {
-    Ok(
-        json!({"settings":state.store.settings(),"meetings":state.store.list("").map_err(message)?,"models":state.models.catalog(),"runtimes":state.runtimes.status(),"keys":state.secrets.status(),"capabilities":providers::capabilities(),"dataDirectory":state.store.root,"activeMeeting":state.recording.lock().await.as_ref().map(|r|r.meeting_id.clone())}),
-    )
+pub async fn bootstrap(app: tauri::AppHandle, state: State<'_, Arc<AppState>>) -> Response<Value> {
+    use tauri::Manager;
+    let payload = json!({"settings":state.store.settings(),"meetings":state.store.list("").map_err(message)?,"models":state.models.catalog(),"runtimes":state.runtimes.status(),"keys":state.secrets.status(),"capabilities":providers::capabilities(),"dataDirectory":state.store.root,"activeMeeting":state.recording.lock().await.as_ref().map(|r|r.meeting_id.clone())});
+    if let Some(ready) = &app.state::<crate::acceptance::Startup>().0 {
+        ready.notify_one();
+    }
+    Ok(payload)
 }
 #[tauri::command]
 pub fn list_meetings(
@@ -118,6 +121,17 @@ pub fn save_key(
 #[tauri::command]
 pub fn delete_key(state: State<'_, Arc<AppState>>, provider: Provider) -> Response<()> {
     state.secrets.delete(&provider).map_err(message)
+}
+#[tauri::command]
+pub async fn provider_model_catalog(
+    state: State<'_, Arc<AppState>>,
+    provider: Provider,
+) -> Response<Vec<crate::cloud_catalog::ListedModel>> {
+    state
+        .ai
+        .cloud_models(&state.secrets, &provider)
+        .await
+        .map_err(message)
 }
 #[tauri::command]
 pub async fn provider_models(

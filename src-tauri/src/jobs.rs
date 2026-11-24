@@ -207,6 +207,88 @@ async fn process(state: &AppState, job: &Job, app: &tauri::AppHandle) -> Result<
     Ok(())
 }
 
+#[cfg(test)]
+#[test]
+fn a_manual_edit_protects_its_audio_and_keeps_the_other_sections_available() {
+    let media: Vec<_> = (0..5)
+        .map(|i| MediaSegment {
+            id: i.to_string(),
+            start_ms: i * 5000,
+            end_ms: (i + 1) * 5000,
+            mixed: String::new(),
+            microphone: None,
+            desktop: None,
+        })
+        .collect();
+    let mut edit = TranscriptSegment {
+        id: "live-2".into(),
+        start_ms: 11_000,
+        end_ms: 13_000,
+        text: "Corrected".into(),
+        speaker: None,
+        provisional: false,
+        edited: true,
+    };
+    let sections = unedited_sections("000000", &media, std::slice::from_ref(&edit)).unwrap();
+    assert_eq!(
+        sections
+            .iter()
+            .map(|(id, part)| (id.as_str(), part.len()))
+            .collect::<Vec<_>>(),
+        [("000000_0_10000", 2), ("000000_15000_25000", 2)]
+    );
+    edit.id = "final-000000-2".into();
+    assert!(
+        unedited_sections("000000", &media, std::slice::from_ref(&edit))
+            .unwrap()
+            .is_empty()
+    );
+    let separated = [media[0].clone(), media[4].clone()];
+    assert!(unedited_sections("000000", &separated, &[edit]).is_none());
+}
+
+fn overlaps_media(row: &TranscriptSegment, group: &[MediaSegment]) -> bool {
+    let index = group.partition_point(|media| media.end_ms <= row.start_ms);
+    group
+        .get(index)
+        .is_some_and(|media| media.start_ms < row.end_ms)
+}
+
+/// Return the untouched runs of source audio when a section contains a manual correction.
+fn unedited_sections<'a>(
+    section: &str,
+    group: &'a [MediaSegment],
+    transcript: &[TranscriptSegment],
+) -> Option<Vec<(String, &'a [MediaSegment])>> {
+    let edits: Vec<_> = transcript
+        .iter()
+        .filter(|s| s.edited && overlaps_media(s, group))
+        .collect();
+    if edits.is_empty() {
+        return None;
+    }
+    // The whole section was already successfully applied before the user edited its result.
+    let final_prefix = format!("final-{section}-");
+    if edits.iter().any(|s| s.id.starts_with(&final_prefix)) {
+        return Some(Vec::new());
+    }
+    let base = section.split('_').next().unwrap_or(section);
+    let parts = group
+        .split(|media| {
+            edits
+                .iter()
+                .any(|s| s.start_ms < media.end_ms && media.start_ms < s.end_ms)
+        })
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let start = part[0].start_ms;
+            let end = part[part.len() - 1].end_ms;
+            (format!("{base}_{start}_{end}"), part)
+        })
+        .collect();
+    Some(parts)
+}
+
 /// Larger context in the final pass; cache each successful section before moving on.
 /// Edited source sections keep their original IDs and wording.
 pub async fn refine_transcript(
@@ -242,28 +324,31 @@ pub async fn refine_transcript(
         pending = rest;
         Some(group)
     });
-    for (index, group) in groups.enumerate() {
+    let mut sections: std::collections::VecDeque<_> = groups
+        .enumerate()
+        .map(|(index, group)| (format!("{index:06}"), group))
+        .collect();
+    while let Some((section_id, group)) = sections.pop_front() {
         let start_ms = group.first().unwrap().start_ms;
         let end_ms = group.last().unwrap().end_ms;
         let current = state.store.load(&meeting.id)?;
-        if current
-            .transcript
-            .iter()
-            .any(|s| s.edited && s.start_ms < end_ms && s.end_ms > start_ms)
-        {
+        if let Some(parts) = unedited_sections(&section_id, group, &current.transcript) {
+            for part in parts.into_iter().rev() {
+                sections.push_front(part);
+            }
             continue;
         }
         let identity = serde_json::json!({"selection":final_config.config.transcription,"language":meeting.config.language,"segments":group});
-        let cached_path = folder.join(format!("refinement-{index:06}.json"));
+        let cached_path = folder.join(format!("refinement-{section_id}.json"));
         let cached: Option<serde_json::Value> = read_json(&cached_path).ok();
         let transcript: Vec<TranscriptSegment> =
             if let Some(cache) = cached.filter(|c| c["identity"] == identity) {
                 serde_json::from_value(cache["transcript"].clone())?
             } else {
-                let file = format!("final-audio-{index:06}.wav");
+                let file = format!("final-audio-{section_id}.wav");
                 crate::media::concat_wav(&folder, group, &folder.join(&file))?;
                 let section = MediaSegment {
-                    id: format!("final-{index:06}"),
+                    id: format!("final-{section_id}"),
                     start_ms,
                     end_ms,
                     microphone: None,
@@ -278,24 +363,29 @@ pub async fn refine_transcript(
                 )?;
                 transcript
             };
+        let mut applied = false;
         state.store.update(&meeting.id, |m| {
-            // A user may have edited this region while inference was running.
+            // A correction made during inference also protects its underlying source audio.
             if !m
                 .transcript
                 .iter()
-                .any(|s| s.edited && s.start_ms < end_ms && s.end_ms > start_ms)
+                .any(|s| s.edited && overlaps_media(s, group))
             {
-                m.transcript
-                    .retain(|s| s.start_ms >= end_ms || s.end_ms <= start_ms);
+                m.transcript.retain(|s| !overlaps_media(s, group));
                 m.transcript.extend(transcript);
                 m.transcript.sort_by_key(|s| s.start_ms);
-            }
-            if let Some(analysis) = &mut m.analysis {
-                analysis.provisional = true;
+                if let Some(analysis) = &mut m.analysis {
+                    analysis.provisional = true;
+                }
+                applied = true;
             }
             Ok(())
         })?;
-        progress();
+        if applied {
+            progress();
+        } else {
+            sections.push_front((section_id, group));
+        }
     }
     Ok(())
 }

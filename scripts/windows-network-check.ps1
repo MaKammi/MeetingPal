@@ -13,7 +13,6 @@ if (-not $process.WaitForExit(600000)) {
     $process.Kill($true)
     throw 'Installed check timed out'
 }
-if ($process.ExitCode -ne 0) { throw "Installed check failed with exit code $($process.ExitCode)" }
 Start-Sleep -Seconds 2
 $events = Get-WinEvent -FilterHashtable @{ LogName='Security'; ID=4688,5156,5157; StartTime=$started } -Oldest
 $family = [Collections.Generic.HashSet[long]]::new()
@@ -40,7 +39,19 @@ foreach ($connection in $network) {
     $address = [Net.IPAddress]::Parse($connection.DestAddress)
     if ($address.IsIPv4MappedToIPv6) { $address = $address.MapToIPv4() }
     if (-not [Net.IPAddress]::IsLoopback($address)) {
-        throw "External IP destination observed for $($connection.Application): $address"
+        $lookups = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-DNS-Client/Operational'; StartTime=$started} -ErrorAction SilentlyContinue
+        $names = foreach ($lookup in $lookups) {
+            if ($family.Contains([long]$lookup.ProcessId)) {
+                foreach ($field in ([xml]$lookup.ToXml()).Event.EventData.Data) {
+                    if ($field.Name -eq 'QueryName') { $field.'#text' }
+                }
+            }
+        }
+        $summary = [ordered]@{program=$connection.Application; destination=$address.ToString(); port=$connection.DestPort; dnsNames=@($names | Sort-Object -Unique)}
+        $summary | ConvertTo-Json | Set-Content -LiteralPath ($Report + '.network.json') -Encoding utf8
+        Write-Output ("DNS names attributed to application processes: " + ($summary.dnsNames -join ', '))
+        throw "External IP destination observed for $($connection.Application): $address port $($connection.DestPort) (direction $($connection.Direction))"
     }
 }
 Write-Output "Windows Filtering Platform checked $($family.Count) processes and $($network.Count) connections."
+if ($process.ExitCode -ne 0) { throw "Installed check failed with exit code $($process.ExitCode)" }

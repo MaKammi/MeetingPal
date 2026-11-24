@@ -22,6 +22,7 @@ src-tauri/binaries/*
 !src-tauri/binaries/.gitkeep
 vendor/
 
+__pycache__/
 *.tsbuildinfo
 settings.json
 library.sqlite*

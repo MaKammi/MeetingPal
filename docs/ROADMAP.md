@@ -32,8 +32,10 @@
 - [x] Bibliothek, Suche, Bearbeitung, Belegsprünge, Exporte, versionierte Auswertungen.
 - [x] Einwilligung, Übertragungsübersicht, lokale Speicherverwaltung, keine Telemetrie.
 - [ ] Offline- und Leistungsmessungen an den installierten Zielpaketen vervollständigen. Der Pakettest misst Import, Wiedergabe und PDF-Export. Mit bereits installierten Modellen prüft er zusätzlich die lokale KI.
-- [ ] Windows-Herausgebersignatur und macOS-Signatur/Notarisierung sind zurückgestellt. Lizenztexte und zugehörige Laufzeitquellen im installierten Paket prüfen und die Distributionsabnahme abschließen.
-- [ ] Manuelle Screenreader- und Sprachabnahme vervollständigen. Dialogfokus, Tastaturnavigation, Kontraste und lokalisierte Bedienelemente wurden überarbeitet. Strg/⌘ + K öffnet die Bibliothekssuche.
+- [ ] Windows-Herausgebersignatur und macOS-Signatur/Notarisierung sind zurückgestellt.
+- [ ] Distributionsmaterial in den veröffentlichten Paketen prüfen. Der Pakettest gleicht die fünf Quellarchive, die Lizenzen, die Codec-Konfiguration und die AppImage-Bibliotheken mit den Releasequellen ab.
+- [x] Deutsche und englische Oberfläche einschließlich Auftragsstatus und integrierter Fehlermeldungen durchgesehen. Bibliothek, Einstellungen, Modellkatalog, Aufnahme, Quellenauswahl, Zuschnitt und alle fünf Meeting-Detailansichten mit Tastatur und automatisierten WCAG-Prüfungen getestet.
+- [ ] Manueller Nutzungstest mit Screenreader auf den Zielgeräten.
 
 - [x] Öffentliche Releases, signierte Programmupdates und manueller oder automatischer Updatecheck mit Offline-Einstellung.
 

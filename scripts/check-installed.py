@@ -9,13 +9,30 @@ import platform
 import plistlib
 import re
 import subprocess
-import sys
+import tarfile
 import tempfile
 import time
 
 
-def run(args, **kwargs):
-    return subprocess.run([str(arg) for arg in args], check=True, timeout=600, **kwargs)
+def run(args, timeout=600, **kwargs):
+    return subprocess.run([str(arg) for arg in args], check=True, timeout=timeout, **kwargs)
+
+
+def machine_info():
+    system = platform.system()
+    if system == "Darwin":
+        def sysctl(name):
+            return run(["sysctl", "-n", name], capture_output=True, text=True).stdout.strip()
+        cpu, memory = sysctl("machdep.cpu.brand_string"), int(sysctl("hw.memsize"))
+    elif system == "Linux":
+        cpu = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
+                    if line.startswith("model name")), platform.machine())
+        memory = int(re.search(r"MemTotal:\s+(\d+)", Path("/proc/meminfo").read_text())[1]) * 1024
+    else:
+        cpu = os.environ.get("PROCESSOR_IDENTIFIER", platform.machine())
+        memory = int(run(["pwsh", "-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"],
+                         capture_output=True, text=True).stdout.strip())
+    return {"systemVersion": platform.platform(), "cpu": cpu, "memoryBytes": memory, "logicalCpus": os.cpu_count()}
 
 
 def audit_linux(trace):
@@ -36,6 +53,51 @@ def audit_linux(trace):
     return "strace followed application and child processes; no external IP destination"
 
 
+def run_macos_observed(command, temp, with_models):
+    # PKTAP attributes packets to the sending or effective process, including WebKit XPC helpers.
+    names = ["meetingpal", "MeetingPal", "llama-server", "whisper-cli", "ffmpeg", "ffprobe",
+             "com.apple.WebKit.Networking", "com.apple.WebKit.WebContent", "com.apple.WebKit.GPU",
+             "com.apple.WebKit", "com.apple.WebKi", "Networking", "WebContent"]
+    senders = " or ".join(f"{field} = '{name}'" for name in names for field in ("proc", "eproc"))
+    capture = temp / "application.pcapng"
+    log = temp / "observer.log"
+    tcpdump = ["sudo", "-n", "/usr/sbin/tcpdump"]
+    with log.open("wb") as diagnostics:
+        # sudo may keep a monitor process. Signal the actual tcpdump PID so it flushes the capture.
+        observer = subprocess.Popen(["sudo", "-n", "/bin/sh", "-c", 'echo "$$"; exec "$@"', "observer", "/usr/sbin/tcpdump",
+                                      "-i", "pktap,all", "-nn", "-U", "-s", "80", "-w", str(capture),
+                                      "-Q", f"dir=out and ({senders})", "ip or ip6"],
+                                    stdout=subprocess.PIPE, stderr=diagnostics, text=True)
+        capture_pid = observer.stdout.readline().strip()
+        if not capture_pid.isdecimal():
+            raise RuntimeError("PKTAP observer could not start: " + log.read_text(errors="replace"))
+        try:
+            for _ in range(100):
+                message = log.read_text(errors="replace")
+                if "listening on" in message:
+                    break
+                if observer.poll() is not None:
+                    raise RuntimeError(f"PKTAP could not start: {message}")
+                time.sleep(0.1)
+            else:
+                raise RuntimeError("PKTAP did not become ready")
+            run(command, timeout=1800)
+        finally:
+            if observer.poll() is None:
+                run(["sudo", "-n", "kill", "-INT", capture_pid])
+                observer.wait(timeout=15)
+    local = "(dst net 127.0.0.0/8 or dst host ::1 or dst net ::ffff:127.0.0.0/104)"
+    def packet(expression):
+        return run(tcpdump + ["-nn", "-q", "-c", "1", "-r", capture, expression],
+                   capture_output=True, text=True).stdout.strip()
+    external = packet("not " + local)
+    if external:
+        raise RuntimeError(f"Application sent an off-device packet: {external}")
+    if with_models and not packet(local):
+        raise RuntimeError("PKTAP did not observe the local inference connection")
+    return "macOS PKTAP observed app, runtime and WebKit senders; no external IP destination"
+
+
 def prepare_models(folder):
     catalog = json.loads((Path(__file__).resolve().parents[1] / "resources/models.json").read_text(encoding="utf8"))
     for model in catalog:
@@ -47,6 +109,7 @@ def prepare_models(folder):
             target = directory / item["filename"]
             run(["curl", "--fail", "--silent", "--show-error", "--location", "--retry", "3",
                  "--output", target, item["url"]])
+            print(f"Verifying {item['filename']}", flush=True)
             with target.open("rb") as file:
                 digest = hashlib.file_digest(file, "sha256").hexdigest()
             if digest != item["sha256"] or target.stat().st_size != item["bytes"]:
@@ -55,13 +118,36 @@ def prepare_models(folder):
 
 
 def check_bundle(directory):
+    root = Path(__file__).resolve().parents[1]
+    lock = json.loads((root / "resources/runtimes.json").read_text(encoding="utf8"))
     expected = ["THIRD_PARTY_NOTICES.txt", "MeetingPal-LICENSE.txt", "NotoSans-LICENSE.txt",
-                "DISTRIBUTION-NOTES.md", "ffmpeg-config.mak", "codec-build.json", "runtime-versions.json"]
-    for runtime in ["whisper", "llama", "ffmpeg", "opus", "libvpx"]:
+                "DISTRIBUTION-NOTES.md", "build-codecs.mjs", "ffmpeg-config.mak", "codec-build.json", "runtime-versions.json"]
+    licenses = {"whisper": "LICENSE", "llama": "LICENSE", "ffmpeg": "COPYING.LGPLv2.1", "opus": "COPYING", "libvpx": "LICENSE"}
+    for runtime in licenses:
         expected += [f"{runtime}-source.tar.gz", f"{runtime}-LICENSE.txt"]
     missing = [name for name in expected if not (directory / name).is_file() or not (directory / name).stat().st_size]
     if missing:
         raise RuntimeError(f"Missing installed distribution materials: {missing}")
+    if json.loads((directory / "runtime-versions.json").read_text()) != lock:
+        raise ValueError("The installed runtime manifest differs from the release source")
+    if json.loads((directory / "codec-build.json").read_text())["sources"] != lock["codecs"]:
+        raise ValueError("Codec build records disagree with the release source")
+    actual = (directory / "ffmpeg-config.mak").read_text().splitlines()
+    for flag in ["GPL", "VERSION3", "NONFREE", "NETWORK"]:
+        if f"!CONFIG_{flag}=yes" not in actual or f"CONFIG_{flag}=yes" in actual:
+            raise ValueError(f"The packaged FFmpeg configuration enabled {flag} or lacks its setting")
+    for runtime, license_name in licenses.items():
+        source = (lock.get(runtime) if runtime in ("llama", "whisper") else lock["codecs"][runtime])
+        with tarfile.open(directory / f"{runtime}-source.tar.gz") as archive:
+            if archive.pax_headers.get("comment") != source["commit"]:
+                raise ValueError(f"Wrong upstream revision for {runtime}")
+            upstream = archive.extractfile(license_name).read().splitlines()
+        if (directory / f"{runtime}-LICENSE.txt").read_bytes().splitlines() != upstream:
+            raise ValueError(f"Installed license differs from upstream {runtime}")
+    for name, path in [("MeetingPal-LICENSE.txt", "LICENSE"), ("NotoSans-LICENSE.txt", "resources/NotoSans-LICENSE.txt"),
+                       ("build-codecs.mjs", "scripts/build-codecs.mjs")]:
+        if (directory / name).read_bytes().splitlines() != (root / path).read_bytes().splitlines():
+            raise ValueError(f"Installed file differs from the release source: {name}")
     return len(expected)
 
 
@@ -75,7 +161,8 @@ def main():
     package = args.package.resolve(strict=True)
     output = args.output.resolve()
     with tempfile.TemporaryDirectory(prefix="meetingpal-package-") as tmp:
-        temp = Path(tmp)
+        # Tauri requires the macOS executable path to have no symlink components.
+        temp = Path(tmp).resolve()
         report = temp / "report.json"
         models = temp / "models"
         if args.test_ai:
@@ -94,20 +181,39 @@ def main():
             elif system == "Darwin":
                 mounted = temp / "volume"
                 run(["hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mounted, package])
-                app = next(mounted.glob("*.app")) / "Contents"
+                bundle = next(mounted.glob("*.app"))
+                install = temp / bundle.name
+                run(["ditto", bundle, install])
+                run(["hdiutil", "detach", mounted])
+                mounted = None
+                app = install / "Contents"
                 with (app / "Info.plist").open("rb") as file:
                     exe = app / "MacOS" / plistlib.load(file)["CFBundleExecutable"]
-                # The child processes inherit this profile. Network reachability is restricted for the whole run.
-                profile = '(version 1)(allow default)(deny network-outbound (remote ip "*:*"))(allow network-outbound (remote ip "localhost:*"))'
                 materials = app / "Resources" / "binaries"
-                command = ["sandbox-exec", "-p", profile, exe, "--check-offline", report]
-                evidence = "installed macOS app with off-device IP traffic denied"
+                command = [exe, "--check-offline", report]
             else:
-                run(["sudo", "apt-get", "install", "-y", str(package)])
-                name = run(["dpkg-deb", "-f", package, "Package"], capture_output=True, text=True).stdout.strip()
-                files = [Path(line) for line in run(["dpkg-query", "-L", name], capture_output=True, text=True).stdout.splitlines()]
-                exe = next(path for path in files if path.parent == Path("/usr/bin") and path.is_file())
-                materials = next(path.parent for path in files if path.name == "runtime-versions.json")
+                if package.suffix == ".AppImage":
+                    package.chmod(0o755)
+                    # Exercise AppRun from the published image without depending on runner FUSE policy.
+                    run([package, "--appimage-extract"], cwd=temp, stdout=subprocess.DEVNULL)
+                    image = temp / "squashfs-root"
+                    exe = image / "AppRun"
+                    materials = next(image.rglob("runtime-versions.json")).parent
+                    with tarfile.open(package.with_name(f"MeetingPal_{args.version}_AppImage-notices.tar.gz")) as notices:
+                        index = notices.extractfile("SOURCES.txt").read().decode()
+                        if "https://launchpad.net/ubuntu/+source/" not in index or "Additional staged names:" in index:
+                            raise ValueError("AppImage has unaccounted distribution libraries")
+                        for entry in index.splitlines():
+                            if " | " in entry:
+                                owner = entry.split(" | ", 1)[0].replace(":", "-")
+                                if not notices.getmember(f"copyright/{owner}.txt").size:
+                                    raise ValueError(f"Missing AppImage license for {owner}")
+                else:
+                    run(["sudo", "apt-get", "install", "-y", str(package)])
+                    name = run(["dpkg-deb", "-f", package, "Package"], capture_output=True, text=True).stdout.strip()
+                    files = [Path(line) for line in run(["dpkg-query", "-L", name], capture_output=True, text=True).stdout.splitlines()]
+                    exe = next(path for path in files if path.parent == Path("/usr/bin") and path.is_file())
+                    materials = next(path.parent for path in files if path.name == "runtime-versions.json")
                 trace = temp / "network.trace"
                 command = ["xvfb-run", "-a", "dbus-run-session", "--", "strace", "-f", "-s", "256",
                            "-e", "trace=network,execve", "-o", trace, exe, "--check-offline", report]
@@ -116,16 +222,35 @@ def main():
                     command.extend(["-Models", models])
                 else:
                     command.append(models)
+            print(f"Checking distribution materials in {package.name}", flush=True)
             count = check_bundle(materials)
+            print("Starting installed application under network observation", flush=True)
+            system_info = machine_info()
             started = time.monotonic()
-            run(command)
+            try:
+                if system == "Darwin":
+                    evidence = run_macos_observed(command, temp, args.test_ai)
+                else:
+                    run(command, timeout=1800)
+            except (subprocess.SubprocessError, OSError, RuntimeError):
+                if report.is_file():
+                    raw = report.read_text(encoding="utf8")
+                    print("Application report:", raw, flush=True)
+                    if raw:
+                        failed = json.loads(raw)
+                        failed.update(**system_info, status="failed", package=package.name,
+                                      distributionFiles=count, launchToExitMs=round((time.monotonic()-started)*1000))
+                        network = Path(str(report) + ".network.json")
+                        if network.is_file():
+                            failed["networkAudit"] = json.loads(network.read_text(encoding="utf-8-sig"))
+                        output.write_text(json.dumps(failed, indent=2) + "\n", encoding="utf8")
+                raise
             result = json.loads(report.read_text(encoding="utf8"))
             if result.get("version") != args.version or result.get("cloudRequests") != 0:
                 raise RuntimeError(f"Installed product check failed: {result}")
             if system == "Linux":
                 evidence = audit_linux(trace)
-            result.update(launchToExitMs=round((time.monotonic() - started) * 1000),
-                          systemVersion=platform.platform(), cpu=os.environ.get("PROCESSOR_IDENTIFIER",platform.machine()),
+            result.update(**system_info, status="passed", launchToExitMs=round((time.monotonic() - started) * 1000),
                           distributionFiles=count, networkEvidence=evidence, package=package.name)
             output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
             print(output.read_text(encoding="utf8"))
