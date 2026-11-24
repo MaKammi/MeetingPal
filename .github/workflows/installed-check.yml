@@ -1,37 +1,30 @@
-name: Spoken interface acceptance
+name: Installed model picker acceptance
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        required: true
-        type: string
 permissions:
+  actions: read
   contents: read
 jobs:
-  speech:
+  picker:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - name: Install the public release and Orca
-        shell: bash
+      - name: Install exact Ubuntu release candidate
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
         run: |
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          file="MeetingPal_${TAG#v}_amd64.deb"
-          gh release download "$TAG" -p "$file" -p SHA256SUMS
-          python3 -c 'from pathlib import Path; import hashlib,sys; p=Path(sys.argv[1]); matches=[l.split("  ",1)[0] for l in Path("SHA256SUMS").read_text().splitlines() if l.endswith("  "+p.name)]; assert matches==[hashlib.file_digest(p.open("rb"),"sha256").hexdigest()]' "$file"
-          sudo apt-get update -qq
-          sudo apt-get install -y "./$file" orca python3-pyatspi openbox xvfb xauth dbus-x11 xdotool pulseaudio speech-dispatcher
-      - name: Read library, search and recording dialog in both languages
-        run: |
-          mkdir -p "$RUNNER_TEMP/orca-session"
-          xvfb-run -a dbus-run-session -- bash -eu -c 'pulseaudio --start --exit-idle-time=-1; /usr/bin/python3 scripts/check-spoken-interface.py "$RUNNER_TEMP/orca-session/speech.log"'
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: ${{ !cancelled() }}
-        with:
-          name: screenreader-diagnostics
-          path: ${{ runner.temp }}/orca-session/speech.log
-          retention-days: 3
+          gh run download 45427418295 --name meetingpal-linux-x64 --dir candidate
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          root = pathlib.Path("candidate")
+          manifest = json.loads((root / "build-info.json").read_text())
+          assert manifest["revision"] == "d27a75687c3173303e3c9ebe2d289d52dca3c178"
+          item, = [part for part in manifest["files"] if part["path"].endswith(".deb")]
+          deb = root / item["path"]
+          assert hashlib.file_digest(deb.open("rb"),"sha256").hexdigest() == item["sha256"]
+          subprocess.run(["sudo","apt-get","update","-qq"],check=True)
+          subprocess.run(["sudo","apt-get","install","-y",str(deb.resolve()),"python3-pyatspi","openbox","xvfb","xauth","dbus-x11","xdotool"],check=True)
+          PY
+      - name: Operate native WebKit provider controls without credentials
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 scripts/check-installed-model-picker.py
