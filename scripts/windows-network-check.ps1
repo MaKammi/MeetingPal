@@ -13,7 +13,6 @@ if (-not $process.WaitForExit(600000)) {
     $process.Kill($true)
     throw 'Installed check timed out'
 }
-if ($process.ExitCode -ne 0) { throw "Installed check failed with exit code $($process.ExitCode)" }
 Start-Sleep -Seconds 2
 $events = Get-WinEvent -FilterHashtable @{ LogName='Security'; ID=4688,5156,5157; StartTime=$started } -Oldest
 $family = [Collections.Generic.HashSet[long]]::new()
@@ -44,3 +43,4 @@ foreach ($connection in $network) {
     }
 }
 Write-Output "Windows Filtering Platform checked $($family.Count) processes and $($network.Count) connections."
+if ($process.ExitCode -ne 0) { throw "Installed check failed with exit code $($process.ExitCode)" }

@@ -47,30 +47,45 @@ pub fn entry() -> anyhow::Result<()> {
         }
         return result;
     }
-    // A separate, temporary library keeps installed-package checks away from user meetings.
-    let check = if args.get(1).is_some_and(|arg| arg == "--check-offline") {
+    // The supervising process owns this temporary directory. All WebView and SQLite
+    // handles in the installed product have closed before Windows removes the files.
+    if args.get(1).is_some_and(|arg| arg == "--check-offline") {
         anyhow::ensure!(
             (3..=4).contains(&args.len()),
             "Usage: --check-offline NEW_REPORT_PATH [INSTALLED_MODELS_DIRECTORY]"
         );
-        Some((
-            tempfile::tempdir()?,
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&args[2])?,
-            args.get(3).map(std::path::PathBuf::from),
-        ))
+        let directory = tempfile::tempdir()?;
+        let status = std::process::Command::new(tauri::utils::platform::current_exe()?)
+            .arg("--check-offline-worker")
+            .arg(directory.path().join("library"))
+            .args(&args[2..])
+            .status()?;
+        directory.close()?;
+        anyhow::ensure!(
+            status.success(),
+            "Installed offline check failed ({status})"
+        );
+        return Ok(());
+    }
+    let check = if args
+        .get(1)
+        .is_some_and(|arg| arg == "--check-offline-worker")
+    {
+        anyhow::ensure!(
+            (4..=5).contains(&args.len()),
+            "Missing installed-check arguments"
+        );
+        let root = std::path::PathBuf::from(&args[2]);
+        std::fs::create_dir(&root)?;
+        let report = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&args[3])?;
+        Some((root, report, args.get(4).map(std::path::PathBuf::from)))
     } else {
         None
     };
-    let (library, check) = match check {
-        Some((directory, report, models)) => {
-            let root = directory.path().to_owned();
-            (Some(directory), Some((root, report, models)))
-        }
-        None => (None, None),
-    };
+    let checking = check.is_some();
     let launch = std::time::Instant::now();
     let ready = check.as_ref().map(|_| Arc::new(tokio::sync::Notify::new()));
     let app = tauri::Builder::default()
@@ -220,9 +235,8 @@ pub fn entry() -> anyhow::Result<()> {
             commands::export_meeting
         ])
         .build(tauri::generate_context!())?;
-    if let Some(library) = library {
+    if checking {
         let code = app.run_return(|_, _| {});
-        library.close()?;
         anyhow::ensure!(code == 0, "Installed offline check failed");
     } else {
         app.run(|_, _| {});

@@ -36,6 +36,46 @@ def audit_linux(trace):
     return "strace followed application and child processes; no external IP destination"
 
 
+def run_macos_observed(command, temp, with_models):
+    # PKTAP attributes packets to the sending or effective process, including WebKit XPC helpers.
+    names = ["meetingpal", "MeetingPal", "llama-server", "whisper-cli", "ffmpeg", "ffprobe",
+             "com.apple.WebKit.Networking", "com.apple.WebKit.WebContent", "com.apple.WebKit.GPU",
+             "com.apple.WebKit", "com.apple.WebKi", "Networking", "WebContent"]
+    senders = " or ".join(f"{field} = '{name}'" for name in names for field in ("proc", "eproc"))
+    capture = temp / "application.pcapng"
+    log = temp / "observer.log"
+    tcpdump = ["sudo", "-n", "/usr/sbin/tcpdump"]
+    with log.open("wb") as diagnostics:
+        observer = subprocess.Popen(tcpdump + ["-i", "pktap,all", "-nn", "-U", "-s", "80", "-w", str(capture),
+                                               "-Q", f"dir=out and ({senders})", "ip or ip6"],
+                                    stdout=subprocess.DEVNULL, stderr=diagnostics)
+        try:
+            for _ in range(100):
+                message = log.read_text(errors="replace")
+                if "listening on" in message:
+                    break
+                if observer.poll() is not None:
+                    raise RuntimeError(f"PKTAP could not start: {message}")
+                time.sleep(0.1)
+            else:
+                raise RuntimeError("PKTAP did not become ready")
+            run(command)
+        finally:
+            if observer.poll() is None:
+                run(["sudo", "-n", "kill", "-INT", observer.pid])
+                observer.wait(timeout=15)
+    local = "(dst net 127.0.0.0/8 or dst host ::1 or dst net ::ffff:127.0.0.0/104)"
+    def packet(expression):
+        return run(tcpdump + ["-nn", "-q", "-c", "1", "-r", capture, expression],
+                   capture_output=True, text=True).stdout.strip()
+    external = packet("not " + local)
+    if external:
+        raise RuntimeError(f"Application sent an off-device packet: {external}")
+    if with_models and not packet(local):
+        raise RuntimeError("PKTAP did not observe the local inference connection")
+    return "macOS PKTAP observed app, runtime and WebKit senders; no external IP destination"
+
+
 def prepare_models(folder):
     catalog = json.loads((Path(__file__).resolve().parents[1] / "resources/models.json").read_text(encoding="utf8"))
     for model in catalog:
@@ -98,7 +138,8 @@ def main():
     package = args.package.resolve(strict=True)
     output = args.output.resolve()
     with tempfile.TemporaryDirectory(prefix="meetingpal-package-") as tmp:
-        temp = Path(tmp)
+        # Tauri requires the macOS executable path to have no symlink components.
+        temp = Path(tmp).resolve()
         report = temp / "report.json"
         models = temp / "models"
         if args.test_ai:
@@ -125,11 +166,8 @@ def main():
                 app = install / "Contents"
                 with (app / "Info.plist").open("rb") as file:
                     exe = app / "MacOS" / plistlib.load(file)["CFBundleExecutable"]
-                # The child processes inherit this profile. Network reachability is restricted for the whole run.
-                profile = '(version 1)(allow default)(deny network-outbound (remote ip "*:*"))(allow network-outbound (remote ip "localhost:*"))'
                 materials = app / "Resources" / "binaries"
-                command = ["sandbox-exec", "-p", profile, exe, "--check-offline", report]
-                evidence = "installed macOS app with off-device IP traffic denied"
+                command = [exe, "--check-offline", report]
             else:
                 if package.suffix == ".AppImage":
                     package.chmod(0o755)
@@ -164,8 +202,11 @@ def main():
             count = check_bundle(materials)
             started = time.monotonic()
             try:
-                run(command)
-            except (subprocess.SubprocessError, OSError):
+                if system == "Darwin":
+                    evidence = run_macos_observed(command, temp, args.test_ai)
+                else:
+                    run(command)
+            except (subprocess.SubprocessError, OSError, RuntimeError):
                 if report.is_file():
                     print("Application report:", report.read_text(encoding="utf8"), flush=True)
                 raise
