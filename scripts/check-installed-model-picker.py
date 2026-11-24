@@ -20,15 +20,15 @@ def find(predicate):
                 return node
 
 
+def accessible_text(node):
+    try:
+        return node.queryText().getText(0, -1)
+    except (NotImplementedError, RuntimeError):
+        return ""
+
+
 def key_error(node):
-    if "für gemini fehlt der api-schlüssel" in (node.name or "").lower():
-        return True
-    if node.getRole() == pyatspi.ROLE_ALERT:
-        try:
-            return "api-schlüssel" in node.queryText().getText(0, -1).lower()
-        except NotImplementedError:
-            pass
-    return False
+    return "für gemini fehlt der api-schlüssel" in ((node.name or "") + " " + accessible_text(node)).casefold()
 
 
 def choose(field, letter):
@@ -65,8 +65,9 @@ with tempfile.TemporaryDirectory(prefix="meetingpal-picker-") as folder:
         exercise()
     except Exception:
         def describe(node):
-            if node.name:
-                print(node.getRoleName(), node.name[:140], flush=True)
+            content = ((node.name or "") + " " + accessible_text(node)).strip()
+            if content:
+                print(node.getRoleName(), content[:180], flush=True)
             return False
         find(describe)
         raise
