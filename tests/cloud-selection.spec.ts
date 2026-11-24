@@ -66,7 +66,7 @@ test("Gemini video can be selected offline, with a cancellable switch and live m
   });
   await page.getByLabel("Bildschirm oder Fenster zusätzlich aufnehmen").check();
   const mode = page.getByLabel("Visuelle Auswertung");
-  const offline = page.getByLabel("Vollständig lokal verarbeiten");
+  const disclosure = page.locator(".disclosure-list");
   await expect(mode.locator('option[value="native"]')).toBeEnabled();
   await mode.selectOption("native");
   const confirm = page.getByRole("dialog", {
@@ -76,11 +76,11 @@ test("Gemini video can be selected offline, with a cancellable switch and live m
     "Videoclips einschließlich Ton an Google Gemini",
   );
   await confirm.getByRole("button", { name: "Lokal bleiben" }).click();
-  await expect(offline).toBeChecked();
+  await expect(disclosure).toContainText("Keine Meeting-Daten an Cloud-Anbieter");
   expect(calls).toEqual([]);
   await mode.selectOption("native");
   await confirm.getByRole("button", { name: "Gemini verwenden" }).click();
-  await expect(offline).not.toBeChecked();
+  await expect(disclosure).toContainText("Google Gemini");
   await expect(mode).toHaveValue("native");
   const model = page.getByLabel("Bild-/Videomodell Modell", { exact: true });
   await expect(model).toHaveValue(newest);
@@ -104,11 +104,59 @@ test("Gemini video can be selected offline, with a cancellable switch and live m
   await model.selectOption("__custom");
   await model.fill("private-custom-id");
   await expect(model).toHaveValue("private-custom-id");
-  await offline.check();
-  await expect(mode).toHaveValue("frames");
+  await mode.selectOption("frames");
+  await page.getByLabel("Bild-/Videomodell Anbieter").selectOption("local");
+  await expect(disclosure).toContainText("Keine Meeting-Daten an Cloud-Anbieter");
   await expect(page.getByLabel("Bild-/Videomodell Anbieter")).toHaveValue(
     "local",
   );
+});
+
+test("analysis loads and refreshes Gemini from a local meeting, including empty catalogs", async ({ page }) => {
+  let reads = 0;
+  await fixture(page, defaultConfig(), () => ++reads === 1 ? [] : [{ id: "gemini-current", inputs: ["text"] }]);
+  await expect(page.getByLabel("Vollständig lokal verarbeiten")).toHaveCount(0);
+  expect(reads).toBe(0);
+  await page.getByLabel("Auswertung & Assistenz Anbieter").selectOption("gemini");
+  await expect(page.getByText(/Der Anbieter meldet keine passenden Modelle/)).toBeVisible();
+  await page.getByRole("button", { name: "Modelle vom Anbieter laden" }).click();
+  await expect(page.getByLabel("Auswertung & Assistenz Modell")).toHaveValue("gemini-current");
+  await expect(page.locator(".disclosure-list")).toContainText("Transkript");
+  await page.getByLabel("Auswertung & Assistenz Anbieter").selectOption("local");
+  await expect(page.locator(".disclosure-list")).toContainText("Keine Meeting-Daten an Cloud-Anbieter");
+  expect(reads).toBe(2);
+});
+
+test("Gemini transcribes both passes and the probe link has its own row", async ({ page }) => {
+  const config = defaultConfig();
+  config.analysis = { provider: "gemini", model: "legacy-offline-choice" };
+  await fixture(page, config, () => [
+    { id: "gemini-current", inputs: ["audio", "text"] },
+    { id: "gemini-3.5-transcribe", inputs: ["audio"] },
+    { id: "gemini-text", inputs: ["text"] },
+  ]);
+  await expect(page.getByLabel("Auswertung & Assistenz Anbieter")).toHaveValue("local");
+  await page.getByLabel("Transkription Anbieter", { exact: true }).selectOption("gemini");
+  const model = page.getByLabel("Transkription Modell", { exact: true });
+  await expect(model).toHaveValue("gemini-current");
+  await expect(model.locator('option[value="gemini-text"]')).toHaveCount(0);
+  await model.selectOption("gemini-3.5-transcribe");
+  const picker = page.locator(".model-picker").filter({ has: model });
+  const features = picker.locator("small").filter({ hasText: "Zeitmarken" });
+  const probe = picker.getByRole("button", { name: "Mit Testdaten beim Anbieter prüfen" });
+  for (const width of [1920, 900]) {
+    await page.setViewportSize({ width, height: 900 });
+    await probe.scrollIntoViewIfNeeded();
+    const bounds = await features.boundingBox();
+    const action = await probe.boundingBox();
+    expect(action!.y).toBeGreaterThanOrEqual(bounds!.y + bounds!.height + 4);
+    expect(action!.x + action!.width).toBeLessThanOrEqual(width);
+  }
+  await page.screenshot({ path: "test-results/gemini-transcription.png" });
+  await page.getByLabel("Anderes Modell für das endgültige Transkript").check();
+  await page.getByLabel("Endgültiges Transkript Anbieter").selectOption("gemini");
+  await expect(page.getByLabel("Endgültiges Transkript Modell")).toHaveValue("gemini-current");
+  await expect(page.locator(".disclosure-list")).toContainText("Audiomix");
 });
 
 test("an older provider response cannot replace the current selection", async ({

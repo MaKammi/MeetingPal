@@ -91,7 +91,6 @@ test("English model selection tests only the selected model and restores keyboar
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.getByRole("button", { name: "Start a new meeting" }).click();
-  await page.getByLabel("Process entirely locally").uncheck();
   await page
     .getByLabel("Transcription provider", { exact: true })
     .selectOption("openai");

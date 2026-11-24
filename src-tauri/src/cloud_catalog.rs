@@ -35,13 +35,12 @@ fn listed(provider: &Provider, item: &Value) -> Option<ListedModel> {
                 .iter()
                 .any(|m| m == "generateContent")
                 || !id.starts_with("gemini-")
+                || specialist(&["live"])
                 || (item["outputModalities"].as_array().is_none()
                     && specialist(&[
                         "tts",
                         "image",
                         "embedding",
-                        "transcribe",
-                        "live",
                         "audio",
                         "robotics",
                         "computer",
@@ -53,7 +52,11 @@ fn listed(provider: &Provider, item: &Value) -> Option<ListedModel> {
             {
                 return None;
             }
-            vec!["text", "image", "video"]
+            if specialist(&["transcribe"]) {
+                vec!["audio"]
+            } else {
+                vec!["text", "image", "video", "audio"]
+            }
         }
         Provider::Anthropic => {
             let mut inputs = vec!["text"];
@@ -205,7 +208,14 @@ pub async fn load(
                 token,
             )]);
         }
-        let data: Value = checked(request.send().await?)?.json().await?;
+        let data: Value = checked(
+            request
+                .timeout(std::time::Duration::from_secs(15))
+                .send()
+                .await?,
+        )?
+        .json()
+        .await?;
         let items = data[if *provider == Provider::Gemini {
             "models"
         } else {
@@ -267,6 +277,13 @@ mod tests {
                 "gemini-3.9-flash"
             ]
         );
+        assert_eq!(
+            listed(&Provider::Gemini, &data("gemini-3.5-transcribe"))
+                .unwrap()
+                .inputs,
+            ["audio"]
+        );
+        assert!(listed(&Provider::Gemini, &data("gemini-new-live")).is_none());
         let mut text = data("gemini-4-new");
         text["inputModalities"] = json!(["TEXT", "IMAGE"]);
         assert!(!listed(&Provider::Gemini, &text)

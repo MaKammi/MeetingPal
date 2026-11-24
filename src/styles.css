@@ -751,6 +751,9 @@ small,
   align-items: center;
   gap: 9px;
 }
+.update-banner {
+  flex-wrap: wrap;
+}
 .loading {
   display: flex;
   flex-direction: column;
@@ -909,10 +912,21 @@ dialog.setup-modal:not([open]) { display: none; }
   min-width: 0;
 }
 .model-picker {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
   margin: 15px 0;
 }
 .model-picker > label {
-  margin-bottom: 7px;
+  margin: 0;
+}
+.model-picker > .text-button {
+  justify-self: start;
+  text-align: start;
+}
+.model-picker .field-row > :is(input, select) {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .model-picker input,
 .model-picker select {

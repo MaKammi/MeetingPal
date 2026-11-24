@@ -46,7 +46,7 @@ import capabilities from "../resources/model-capabilities.json";
 import { useUpdates, updateError } from "./useUpdates";
 import { cloudKeyChanged, useCloudModels } from "./useCloudModels";
 import { version as appVersion } from "../package.json";
-import { bytes, defaultConfig, disclosure, duration } from "./types";
+import { bytes, defaultConfig, disclosure, duration, editableConfig, withSelectedProviders } from "./types";
 import type {
   Bootstrap,
   Meeting,
@@ -367,10 +367,16 @@ function App() {
           </div>
         </header>
         {updates.version && page !== "settings" && (
-          <div className="preview-banner" role="status">
+          <div className="preview-banner update-banner">
             <Download size={16} />
-            <span>{t(`MeetingPal ${updates.version} ist verfügbar.`, `MeetingPal ${updates.version} is available.`)}</span>
-            <button className="secondary" onClick={() => setPage("settings")}>{t("Update ansehen", "View update")}</button>
+            <span role="status">{updates.status === "installing"
+              ? t("Update wird installiert …", "Installing update…") + (updates.percent === null ? "" : ` ${updates.percent}%`)
+              : t(`MeetingPal ${updates.version} ist verfügbar.`, `MeetingPal ${updates.version} is available.`)}</span>
+            <button className="secondary" disabled={!!boot.activeMeeting || updates.status === "checking" || updates.status === "installing"} onClick={() => void updates.install()}>
+              {t(`Version ${updates.version} installieren und neu starten`, `Install ${updates.version} and restart`)}
+            </button>
+            {boot.activeMeeting && <span>{t("Updates sind nach der Aufnahme verfügbar.", "Updates are available after recording.")}</span>}
+            {updates.error && <span role="alert">{updateError(updates.error, t)}</span>}
           </div>
         )}
         {!desktop && (
@@ -752,7 +758,7 @@ function ModelPicker({
   const providers: Provider[] = nativeVideo
     ? ["gemini"]
     : task.endsWith("transcription")
-      ? ["local", "openai"]
+      ? ["local", "openai", "gemini"]
       : ["local", "openai", "anthropic", "gemini"];
   const local = task.endsWith("transcription")
     ? ["whisper-small", "whisper-turbo"]
@@ -907,6 +913,9 @@ function ModelPicker({
                 )}
           </button>
         )}
+      {online && desktop && value.provider !== "local" && !loading && !error && !suggestions.length && (
+        <small role="status">{t("Der Anbieter meldet keine passenden Modelle. Du kannst die Liste aktualisieren oder eine Modell-ID eingeben.", "The provider returned no compatible models. Refresh the list or enter a model ID.")}</small>
+      )}
       {receipt?.key === key && (
         <small role="status">{diagnostic(receipt.text, t)}</small>
       )}
@@ -937,7 +946,7 @@ function Setup({
   onStart: (c: MeetingConfig, test: boolean) => void;
 }) {
   const [c, setC] = useState<MeetingConfig>(() => ({
-    ...structuredClone(config),
+    ...editableConfig(config),
     consent: false,
     title: file
       ? file
@@ -967,7 +976,8 @@ function Setup({
     sourceError: null,
   });
   const [loading, setLoading] = useState(true);
-  const patch = (v: Partial<MeetingConfig>) => setC((c) => ({ ...c, ...v }));
+  const patch = (changes: Partial<MeetingConfig>) =>
+    setC((current) => withSelectedProviders({ ...current, ...changes }));
   useEffect(() => {
     if (file) {
       setLoading(false);
@@ -997,7 +1007,6 @@ function Setup({
     (!c.finalTranscription || c.finalTranscription.model.trim()) &&
     (c.videoAnalysis === "none" || c.vision.model.trim()) &&
     (c.videoAnalysis !== "native" || c.vision.provider === "gemini") &&
-    (!c.offline || !transmissions.length) &&
     (c.video.kind === "none" || file || c.video.id);
   return (
     <Modal className="setup-modal" labelledBy="setup-title" onClose={() => { if (!busy) onClose(); }}>
@@ -1189,32 +1198,6 @@ function Setup({
               </>
             )}
             <h3>{t("Deine KI, deine Wahl.", "Your AI, your choice.")}</h3>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={c.offline}
-                onChange={(e) => {
-                  const offline = e.target.checked;
-                  patch({
-                    offline,
-                    ...(offline
-                      ? {
-                          transcription: defaultConfig().transcription,
-                          finalTranscription: null,
-                          analysis: defaultConfig().analysis,
-                          vision: defaultConfig().vision,
-                          videoAnalysis:
-                            c.videoAnalysis === "native"
-                              ? "frames"
-                              : c.videoAnalysis,
-                        }
-                      : {}),
-                  });
-                }}
-              />
-              <ShieldCheck size={18} />
-              {t("Vollständig lokal verarbeiten", "Process entirely locally")}
-            </label>
             <ModelPicker
               label={t("Transkription", "Transcription")}
               task="transcription"
@@ -1390,14 +1373,6 @@ function Setup({
                 </div>
               )}
             </div>
-            {c.offline && transmissions.length > 0 && (
-              <div className="warning-box">
-                {t(
-                  "Für das lokale Profil müssen alle aktivierten Aufgaben lokale Modelle verwenden.",
-                  "Offline mode requires local models for all enabled tasks.",
-                )}
-              </div>
-            )}
             {missing.length > 0 && (
               <div className="warning-box">
                 <Cpu size={17} />
@@ -1685,9 +1660,9 @@ function SettingsPage({
   onSaved: () => Promise<void>;
   notify: (v: string) => void;
 }) {
-  const [settings, setSettings] = useState<Settings>(
-    structuredClone(boot.settings),
-  );
+  const [settings, setSettings] = useState<Settings>(() => ({
+    ...structuredClone(boot.settings), defaultConfig: editableConfig(boot.settings.defaultConfig),
+  }));
   const [keys, setKeys] = useState<Record<string, string>>({});
   const updateBusy = updates.status === "checking" || updates.status === "installing";
   let updateMessage = "";
@@ -1865,29 +1840,6 @@ function SettingsPage({
           {updateMessage && <p className="muted" role="status">{updateMessage}</p>}
           {updates.error && <p className="warning-box" role="alert">{updateError(updates.error, t)}</p>}
           <h3>{t("Standards für neue Meetings", "Defaults for new meetings")}</h3>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={settings.defaultConfig.offline}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  defaultConfig: {
-                    ...settings.defaultConfig,
-                    offline: e.target.checked,
-                    ...(e.target.checked
-                      ? {
-                          transcription: defaultConfig().transcription,
-                          analysis: defaultConfig().analysis,
-                          vision: defaultConfig().vision,
-                        }
-                      : {}),
-                  },
-                })
-              }
-            />
-            {t("Lokales Profil", "Offline profile")}
-          </label>
           <ModelPicker
             task="transcription"
             label={t("Transkription", "Transcription")}
@@ -1896,7 +1848,7 @@ function SettingsPage({
             onChange={(transcription) =>
               setSettings(current => ({
                 ...current,
-                defaultConfig: { ...current.defaultConfig, transcription },
+                defaultConfig: withSelectedProviders({ ...current.defaultConfig, transcription }),
               }))
             }
             t={t}
@@ -1909,7 +1861,7 @@ function SettingsPage({
             onChange={(analysis) =>
               setSettings(current => ({
                 ...current,
-                defaultConfig: { ...current.defaultConfig, analysis },
+                defaultConfig: withSelectedProviders({ ...current.defaultConfig, analysis }),
               }))
             }
             t={t}

@@ -44,11 +44,11 @@ test("setup explains consent, source audio and local/cloud boundaries", async ({
   await expect(
     page.getByText("Der Desktop-Ton kann auch andere Anwendungen enthalten."),
   ).toBeVisible();
-  await page.getByLabel("Vollständig lokal verarbeiten").uncheck();
+  await expect(page.getByLabel("Vollständig lokal verarbeiten")).toHaveCount(0);
   await page.getByLabel("Transkription Anbieter").selectOption("openai");
   await page.getByLabel("Transkription Modell").fill("example-transcribe");
   await expect(page.locator(".disclosure-list")).toContainText("OpenAI");
-  await page.getByLabel("Vollständig lokal verarbeiten").check();
+  await page.getByLabel("Transkription Anbieter").selectOption("local");
   await expect(page.getByLabel("Transkription Anbieter")).toHaveValue("local");
   await expect(page.locator(".disclosure-list")).not.toContainText("OpenAI");
   await page.screenshot({ path: "test-results/setup.png", fullPage: true });

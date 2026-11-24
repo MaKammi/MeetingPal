@@ -11,5 +11,6 @@
   {"provider":"openai","model":"gpt-4o-transcribe-diarize","features":["audio","speakerLabels","timestamps","audioStream"]},
   {"provider":"openai","model":"gpt-4.1-mini","features":["text","image"]},
   {"provider":"anthropic","model":"claude-haiku-4-5","features":["text","image"]},
-  {"provider":"gemini","model":"gemini-2.5-flash","features":["text","image","video"]}
+  {"provider":"gemini","model":"gemini-3.5-transcribe","features":["audio","speakerLabels","timestamps"]},
+  {"provider":"gemini","model":"gemini-2.5-flash","features":["text","image","video","audio"]}
 ]

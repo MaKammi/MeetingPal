@@ -86,6 +86,27 @@ Die installierte Version 0.1.3 bestätigt den Start erst nach dem ersten erfolgr
 
 Der Workflow **Spoken interface acceptance** installiert das veröffentlichte Ubuntu-Deb-Paket und bedient MeetingPal in einer temporären X11-Sitzung mit Orca. Er prüft den AT-SPI-Fokus und die Reihenfolge der von Orca gesprochenen Beschriftungen für Startschaltfläche, Bibliothekssuche per Strg+K, Aufnahmedialog und Fokusrückgabe per Escape. Jede Aktion läuft mit deutscher und englischer Oberfläche. [Erster Durchlauf mit dem öffentlichen Paket 0.1.2](https://github.com/MaKammi/MeetingPal/actions/runs/45416296119)
 
+### Installierte Pakete 0.1.3
+
+Messungen mit elf Sekunden öffentlichem Testaudio auf separaten GitHub-VMs, alle Zeiten in Millisekunden. Whisper-Small und Qwen waren vor dem Start lokal installiert. Die beiden Linux-Pakete, beide macOS-Architekturen und der Windows-Installer bestanden die Prüfung der jeweils 18 Distributionsdateien. Die Netzwerkbeobachtung umfasst die Anwendung und ihre Hilfsprozesse. [Paketabnahme](https://github.com/MaKammi/MeetingPal/actions/runs/45424590962)
+
+| Paket | Start | Import | Wiedergabeaufbereitung | Transkription | Auswertung | PDF |
+|---|---:|---:|---:|---:|---:|---:|
+| Ubuntu AppImage | 1.457 | 151 | 71 | 8.088 | 26.494 | 34 |
+| Ubuntu Deb | 1.668 | 236 | 83 | 7.158 | 25.370 | 43 |
+| Windows x64, Standard (Baukandidat¹) | 7.716 | 121 | 18 | 6.673 | 24.337 | 43 |
+| Windows x64, ohne WPAD | 8.563 | 118 | 17 | 6.558 | 24.260 | 41 |
+| macOS Apple Silicon | 3.203 | 143 | 7 | 50.609 | 164.434 | 98 |
+| macOS Intel | 2.032 | 95 | 22 | 149.181 | 122.689 | 129 |
+
+¹ Der Windows-Standardlauf vor Veröffentlichung prüfte denselben Installer aus dem getaggten Build. Die Windows Filtering Platform beobachtete in beiden Proxyeinstellungen jeweils 16 Prozesse und 32 lokale Verbindungen. [Windows-Vergleichsmessung](https://github.com/MaKammi/MeetingPal/actions/runs/45417825521)
+
+Der öffentliche Feed lieferte sechs Plattformziele. Der echte Windows-Updater lud für eine simulierte ältere Installation 104.433.282 Byte herunter und verifizierte die Signatur von 0.1.3. Orca sprach im installierten Ubuntu-Paket die getesteten Beschriftungen und den Dialogwechsel in beiden Oberflächensprachen. [Orca-Abnahme](https://github.com/MaKammi/MeetingPal/actions/runs/45424590718)
+
+## Prüfungen für 0.1.4
+
+Mit dem öffentlichen englischen Benchmark-Audio und dem in MeetingPal eingerichteten Zugang hat `gemini-3.5-transcribe` die Aufnahme in 1,99 Sekunden mit Wortzeitmarken und Sprecherkennung transkribiert. `gemini-4-argon` war das erste kompatible Modell im aktuellen Gemini-Katalog und bestand denselben Transkriptionstest in 9,56 Sekunden. Beide Durchläufe benötigten jeweils einen Modellaufruf. Der Dialogtest prüft beide Transkriptfelder, Anbieterwechsel aus einem lokalen Profil, Aktualisieren nach leerer Liste, ältere widersprüchliche Profile sowie den Abstand zwischen Fähigkeiten und Testschaltfläche bei 900 und 1920 Pixeln Fensterbreite.
+
 ## Lokal nachgewiesen (18. November 2026)
 
 - Windows: Frontend-Build, Unit-Tests und Browser-Interaktion erfolgreich.

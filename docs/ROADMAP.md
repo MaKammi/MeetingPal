@@ -31,9 +31,9 @@
 
 - [x] Bibliothek, Suche, Bearbeitung, Belegsprünge, Exporte, versionierte Auswertungen.
 - [x] Einwilligung, Übertragungsübersicht, lokale Speicherverwaltung, keine Telemetrie.
-- [ ] Offline- und Leistungsmessungen an den installierten Zielpaketen vervollständigen. Der Pakettest misst Import, Wiedergabe und PDF-Export. Mit bereits installierten Modellen prüft er zusätzlich die lokale KI.
+- [x] Offline-Betrieb und Laufzeiten an den installierten Zielpaketen auf Windows, macOS Intel und Apple Silicon sowie Ubuntu (Deb und AppImage) gemessen. Der Pakettest beobachtet externe Verbindungen und misst Start, Import, Wiedergabe, lokale Transkription, Auswertung und PDF-Export. Die Ergebnisse stehen im Testprotokoll.
 - [ ] Windows-Herausgebersignatur und macOS-Signatur/Notarisierung sind zurückgestellt.
-- [ ] Distributionsmaterial in den veröffentlichten Paketen prüfen. Der Pakettest gleicht die fünf Quellarchive, die Lizenzen, die Codec-Konfiguration und die AppImage-Bibliotheken mit den Releasequellen ab.
+- [x] Fünf Quellarchive, Lizenzen, Codec-Konfiguration und Distributionsmaterial in den veröffentlichten Paketen aller vier Ziele mit den Releasequellen abgeglichen. Die Begleitdateien des AppImage weisen die gebündelten Bibliotheken nach.
 - [x] Deutsche und englische Oberfläche einschließlich Auftragsstatus und integrierter Fehlermeldungen durchgesehen. Bibliothek, Einstellungen, Modellkatalog, Aufnahme, Quellenauswahl, Zuschnitt und alle fünf Meeting-Detailansichten mit Tastatur und automatisierten WCAG-Prüfungen getestet.
 - [x] Sprachausgabe von Orca für Bibliothek, Suche, Aufnahmedialog und Fokusrückgabe mit dem installierten Ubuntu-Paket auf Deutsch und Englisch geprüft.
 - [ ] Manueller Nutzungstest mit Screenreader auf den Zielgeräten.

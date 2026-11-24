@@ -62,8 +62,8 @@ pub async fn run(
     match task {
         Task::Audio => {
             ensure!(
-                selection.provider == Provider::Openai,
-                "Audio transcription requires OpenAI"
+                matches!(selection.provider, Provider::Openai | Provider::Gemini),
+                "Cloud transcription requires OpenAI or Gemini."
             );
             config.transcription = selection.clone();
             config.stream_transcription = true;
@@ -113,7 +113,11 @@ pub async fn run(
                     .any(|s| s.text.to_lowercase().contains("country")),
                 "The model did not recognize the public test speech"
             );
-            if crate::transcription::model_supports("openai", &selection.model, "audioStream") {
+            if crate::transcription::model_supports(
+                selection.provider.key(),
+                &selection.model,
+                "audioStream",
+            ) {
                 ensure!(
                     received.load(std::sync::atomic::Ordering::Relaxed),
                     "No streaming transcript received"

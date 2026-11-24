@@ -8,11 +8,11 @@ Die Windows-Oberfläche verwendet Microsoft Edge WebView2. Auf dem Windows-Tests
 
 Die automatische Prüfung auf Programmupdates ist beim lokalen Standardprofil zunächst aus. Die Einstellung „Auch bei lokaler KI“ erlaubt eine Anfrage an den öffentlichen GitHub-Releasefeed. „Jetzt nach Updates suchen“ löst eine einzelne Anfrage aus. GitHub erhält dabei übliche Verbindungsdaten einschließlich der IP-Adresse. Der Abruf verwendet keine Meeting-Inhalte, API-Schlüssel oder Kontokennung.
 
-Im Cloud-Profil ruft die Modellauswahl mit dem hinterlegten API-Schlüssel die Modellliste des ausgewählten Anbieters ab. Die Liste wird beim Öffnen und während längerer Nutzung aktualisiert. Beim Wechsel zu Gemini-Videoclips aus einem lokalen Meeting erscheint zuerst die Bestätigung für die Cloud-Verarbeitung. Beispiele werden erst über die Schaltfläche zum Modelltest übertragen.
+Sind für alle aktiven Aufgaben lokale Modelle gewählt, bleibt das Meeting im lokalen Profil. Bei Auswahl eines Cloud-Anbieters ruft MeetingPal mit dem hinterlegten API-Schlüssel dessen Modellliste ab. Die Liste wird beim Öffnen und während längerer Nutzung aktualisiert. Beim Wechsel zu Gemini-Videoclips aus einem lokalen Meeting erscheint zuerst die Bestätigung für die Cloud-Verarbeitung. Beispiele werden erst über die Schaltfläche zum Modelltest übertragen.
 
 Bei Cloud-Profilen werden die im Aufnahme-Dialog genannten Daten übertragen:
 
-- Transkription: abgeleiteter Audiomix an OpenAI.
+- Für die Transkription erhält der gewählte Anbieter (OpenAI oder Google Gemini) den abgeleiteten Audiomix des jeweiligen Abschnitts. Für das endgültige Transkript ist eine eigene Anbieterwahl möglich.
 - Auswertung und Fragen: relevante Transkriptabschnitte, Notizen beziehungsweise Bildbeschreibungen an den gewählten Textanbieter.
 - Bilder: ausgewählte, bereits zugeschnittene Video-Frames an das Vision-Modell.
 - Die ausdrücklich ausgewählte native Gemini-Videoanalyse überträgt Clips mit Ton über die Files API. MeetingPal wartet auf die Verarbeitung und fordert die Löschung jeder hochgeladenen Datei nach Erfolg und bei Verarbeitungsfehlern an. Nach einem Prozessabbruch oder einer fehlgeschlagenen Löschung gilt die Aufbewahrungsfrist des Anbieters. Das Anfragelimit berücksichtigt Upload, Statusabfragen, Auswertung und Löschung.

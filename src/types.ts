@@ -193,6 +193,24 @@ export function bytes(value: number) {
     ? `${(value / 1e9).toFixed(1)} GB`
     : `${Math.round(value / 1e6)} MB`;
 }
+export function withSelectedProviders(config: MeetingConfig): MeetingConfig {
+  return { ...config, offline: disclosure(config).length === 0 };
+}
+
+// Honor an explicit offline preference in profiles saved by older versions.
+export function editableConfig(saved: MeetingConfig): MeetingConfig {
+  const config = structuredClone(saved);
+  if (config.offline) {
+    const local = defaultConfig();
+    if (config.transcription.provider !== "local") config.transcription = local.transcription;
+    if (config.analysis.provider !== "local") config.analysis = local.analysis;
+    if (config.vision.provider !== "local") config.vision = local.vision;
+    if (config.finalTranscription && config.finalTranscription.provider !== "local") config.finalTranscription = null;
+    if (config.videoAnalysis === "native") config.videoAnalysis = config.video.kind === "none" ? "none" : "frames";
+  }
+  return withSelectedProviders(config);
+}
+
 export function disclosure(config: MeetingConfig) {
   const transmissions: { task: string; provider: Provider; data: "audio" | "transcript" | "images" | "video + audio" }[] =
     [];

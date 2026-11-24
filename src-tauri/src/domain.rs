@@ -155,8 +155,11 @@ impl MeetingConfig {
                 "Select a final transcription model."
             );
             anyhow::ensure!(
-                matches!(selection.provider, Provider::Local | Provider::Openai),
-                "Final transcription requires local Whisper or OpenAI."
+                matches!(
+                    selection.provider,
+                    Provider::Local | Provider::Openai | Provider::Gemini
+                ),
+                "Final transcription requires local Whisper, OpenAI or Gemini."
             );
             anyhow::ensure!(
                 !self.offline || selection.provider == Provider::Local,
@@ -198,9 +201,9 @@ impl MeetingConfig {
         anyhow::ensure!(
             matches!(
                 self.transcription.provider,
-                Provider::Local | Provider::Openai
+                Provider::Local | Provider::Openai | Provider::Gemini
             ),
-            "Transcription requires a local Whisper model or OpenAI."
+            "Transcription requires local Whisper, OpenAI or Gemini."
         );
         if self.video_analysis == VideoAnalysis::Native {
             anyhow::ensure!(

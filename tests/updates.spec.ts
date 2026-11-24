@@ -37,7 +37,8 @@ for (const offline of [true, false]) {
       await page.getByRole("button", { name: "Einstellungen", exact: true }).click();
       await page.getByRole("button", { name: "Jetzt nach Updates suchen" }).click();
     } else {
-      await page.getByRole("button", { name: "Update ansehen" }).click();
+      await expect(page.getByText("MeetingPal 1.2.3 ist verfügbar.")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Neues Meeting starten" })).toBeVisible();
     }
     const install = page.getByRole("button", { name: "Version 1.2.3 installieren und neu starten" });
     await expect(install).toBeVisible();

@@ -61,6 +61,26 @@ async fn newest_available_models() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "calls the dedicated Gemini speech model with public test audio"]
+async fn gemini_audio_dedicated() -> Result<()> {
+    probe(Provider::Gemini, "gemini-3.5-transcribe", Task::Audio).await
+}
+#[tokio::test]
+#[ignore = "discovers the newest available Gemini audio model and transcribes public test audio"]
+async fn gemini_audio_latest() -> Result<()> {
+    let models = meetingpal_lib::cloud_catalog::load(
+        &reqwest::Client::new(),
+        &Secrets::default(),
+        &Provider::Gemini,
+    )
+    .await?;
+    let latest = models
+        .iter()
+        .find(|model| model.inputs.contains(&"audio"))
+        .expect("No Gemini audio model");
+    probe(Provider::Gemini, &latest.id, Task::Audio).await
+}
+#[tokio::test]
 #[ignore = "calls a paid provider using the configured MeetingPal key and public test audio"]
 async fn openai_speaker_stream() -> Result<()> {
     probe(Provider::Openai, "gpt-4o-transcribe-diarize", Task::Audio).await

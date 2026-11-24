@@ -132,6 +132,16 @@ const german: Record<string, string> = {
   "Select a model for each task.": "Wähle für jede Aufgabe ein Modell.",
   "Transcription requires a local Whisper model or OpenAI.":
     "Für die Transkription wird ein lokales Whisper-Modell oder OpenAI benötigt.",
+  "Transcription requires local Whisper, OpenAI or Gemini.":
+    "Wähle lokales Whisper, OpenAI oder Google Gemini für die Transkription.",
+  "Final transcription requires local Whisper, OpenAI or Gemini.":
+    "Wähle lokales Whisper, OpenAI oder Google Gemini für das endgültige Transkript.",
+  "Gemini did not return a complete transcript": "Gemini hat kein vollständiges Transkript geliefert.",
+  "Missing Gemini audio response": "Die Transkriptionsantwort von Gemini fehlt.",
+  "Missing Gemini word timestamps": "In der Antwort von Gemini fehlen die Wortzeitmarken.",
+  "Invalid Gemini word timestamp": "Gemini hat eine ungültige Wortzeitmarke geliefert.",
+  "Cloud transcription requires OpenAI or Gemini.":
+    "Wähle OpenAI oder Google Gemini für die Cloud-Transkription.",
   "Unsupported language": "Diese Sprache wird nicht unterstützt.",
   "Invalid PDF font": "Die PDF-Schrift ist ungültig.",
   "Unsupported export format": "Das Exportformat wird nicht unterstützt.",

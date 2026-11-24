@@ -107,8 +107,10 @@ def prepare_models(folder):
         directory.mkdir(parents=True)
         for item in model["files"]:
             target = directory / item["filename"]
-            run(["curl", "--fail", "--silent", "--show-error", "--location", "--retry", "3",
-                 "--output", target, item["url"]])
+            # Allow a slow but progressing model download, and retry an idle CDN connection.
+            run(["curl", "--fail", "--silent", "--show-error", "--location", "--connect-timeout", "20",
+                 "--speed-time", "45", "--speed-limit", "1024", "--retry", "3", "--retry-all-errors",
+                 "--output", target, item["url"]], timeout=1200)
             print(f"Verifying {item['filename']}", flush=True)
             with target.open("rb") as file:
                 digest = hashlib.file_digest(file, "sha256").hexdigest()

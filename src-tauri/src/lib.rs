@@ -8,6 +8,7 @@ pub mod cloud_catalog;
 pub mod commands;
 pub mod domain;
 pub mod exports;
+mod gemini_audio;
 mod gemini_files;
 pub mod jobs;
 pub mod media;

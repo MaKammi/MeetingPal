@@ -119,13 +119,13 @@ pub fn capabilities() -> Vec<Capabilities> {
         },
         Capabilities {
             provider: "gemini".into(),
-            transcription: false,
+            transcription: true,
             text: true,
             images: true,
             native_video: true,
             streaming: false,
-            speaker_labels: false,
-            timestamps: false,
+            speaker_labels: true,
+            timestamps: true,
         },
     ]
 }
@@ -559,6 +559,17 @@ impl Ai {
             }
             return Ok(out);
         }
+        if selection.provider == Provider::Gemini {
+            return crate::gemini_audio::transcribe(
+                &self.client,
+                state,
+                meeting,
+                segment,
+                &path,
+                provisional,
+            )
+            .await;
+        }
         anyhow::ensure!(
             selection.provider == Provider::Openai,
             "Unsupported transcription provider"
@@ -802,7 +813,7 @@ pub(crate) fn reserve_cloud_requests(
     })?;
     Ok(())
 }
-fn validate_model_id(id: &str) -> Result<()> {
+pub(crate) fn validate_model_id(id: &str) -> Result<()> {
     anyhow::ensure!(
         id.chars()
             .all(|c| c.is_ascii_alphanumeric() || "-._/".contains(c))

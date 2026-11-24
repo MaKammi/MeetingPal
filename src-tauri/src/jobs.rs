@@ -303,8 +303,13 @@ pub async fn refine_transcript(
     if let Some(selection) = &meeting.config.final_transcription {
         final_config.config.transcription = selection.clone();
     }
-    // Speaker IDs are request-scoped. Use up to ten minutes of 16 kHz mono PCM
-    // (19.2 MB) per diarization request while keeping existing ASR cache boundaries.
+    // Leave room for base64 encoding Gemini WAVs inside an inline JSON request.
+    // OpenAI accepts the same 16 kHz mono PCM as a binary multipart attachment.
+    let max_section_ms = if final_config.config.transcription.provider == Provider::Gemini {
+        300_000
+    } else {
+        600_000
+    };
     let diarized = crate::transcription::model_supports(
         final_config.config.transcription.provider.key(),
         &final_config.config.transcription.model,
@@ -315,7 +320,7 @@ pub async fn refine_transcript(
         let first = pending.first()?;
         let count = if diarized {
             pending
-                .partition_point(|s| s.end_ms.saturating_sub(first.start_ms) <= 600_000)
+                .partition_point(|s| s.end_ms.saturating_sub(first.start_ms) <= max_section_ms)
                 .max(1)
         } else {
             pending.len().min(12)
