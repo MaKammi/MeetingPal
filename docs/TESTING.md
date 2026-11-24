@@ -94,18 +94,37 @@ Messungen mit elf Sekunden öffentlichem Testaudio auf separaten GitHub-VMs, all
 |---|---:|---:|---:|---:|---:|---:|
 | Ubuntu AppImage | 1.457 | 151 | 71 | 8.088 | 26.494 | 34 |
 | Ubuntu Deb | 1.668 | 236 | 83 | 7.158 | 25.370 | 43 |
-| Windows x64, Standard (Baukandidat¹) | 7.716 | 121 | 18 | 6.673 | 24.337 | 43 |
+| Windows x64, Standard | 8.551 | 113 | 15 | 6.660 | 23.838 | 42 |
 | Windows x64, ohne WPAD | 8.563 | 118 | 17 | 6.558 | 24.260 | 41 |
 | macOS Apple Silicon | 3.203 | 143 | 7 | 50.609 | 164.434 | 98 |
 | macOS Intel | 2.032 | 95 | 22 | 149.181 | 122.689 | 129 |
 
-¹ Der Windows-Standardlauf vor Veröffentlichung prüfte denselben Installer aus dem getaggten Build. Die Windows Filtering Platform beobachtete in beiden Proxyeinstellungen jeweils 16 Prozesse und 32 lokale Verbindungen. [Windows-Vergleichsmessung](https://github.com/MaKammi/MeetingPal/actions/runs/45417825521)
+Alle sechs Durchläufe mit den veröffentlichten Installern bestanden. Der Windows-Standardlauf wurde nach einem Zeitlimit beim Herunterladen des Testmodells wiederholt. Die Windows Filtering Platform beobachtete im erfolgreichen Standardlauf 16 Prozesse und 32 lokale Verbindungen. Auch die Vergleichsmessung mit denselben Installerbytes vor der Veröffentlichung bestand in beiden Proxyeinstellungen. [Windows-Vergleichsmessung](https://github.com/MaKammi/MeetingPal/actions/runs/45417825521)
 
 Der öffentliche Feed lieferte sechs Plattformziele. Der echte Windows-Updater lud für eine simulierte ältere Installation 104.433.282 Byte herunter und verifizierte die Signatur von 0.1.3. Orca sprach im installierten Ubuntu-Paket die getesteten Beschriftungen und den Dialogwechsel in beiden Oberflächensprachen. [Orca-Abnahme](https://github.com/MaKammi/MeetingPal/actions/runs/45424590718)
 
 ## Prüfungen für 0.1.4
 
 Mit dem öffentlichen englischen Benchmark-Audio und dem in MeetingPal eingerichteten Zugang hat `gemini-3.5-transcribe` die Aufnahme in 1,99 Sekunden mit Wortzeitmarken und Sprecherkennung transkribiert. `gemini-4-argon` war das erste kompatible Modell im aktuellen Gemini-Katalog und bestand denselben Transkriptionstest in 9,56 Sekunden. Beide Durchläufe benötigten jeweils einen Modellaufruf. Der Dialogtest prüft beide Transkriptfelder, Anbieterwechsel aus einem lokalen Profil, Aktualisieren nach leerer Liste, ältere widersprüchliche Profile sowie den Abstand zwischen Fähigkeiten und Testschaltfläche bei 900 und 1920 Pixeln Fensterbreite.
+
+Ein zusätzlicher Test bediente das aus dem getaggten Build installierte Ubuntu-Paket über die echte WebKit-Oberfläche. Bei „Auswertung & Assistenz“ und „Transkription“ ließ sich Google Gemini jeweils direkt aus dem lokalen Meeting wählen. Auf der frischen VM ohne Zugangsschlüssel erschien der Hinweis zum fehlenden Gemini-Schlüssel. Die Aktualisierung war bedienbar, die Rückkehr zur lokalen Auswahl funktionierte in beiden Feldern. [Prüfung der installierten Modellauswahl](https://github.com/MaKammi/MeetingPal/actions/runs/45430716088)
+
+### Installierte Pakete 0.1.4
+
+Alle sechs Durchläufe mit den veröffentlichten Paketen bestanden. Auf jeder VM importierte MeetingPal elf Sekunden öffentliches Testaudio, erstellte mit lokalen Modellen ein Transkript und eine Auswertung und exportierte ein PDF. Die gemessenen Zeiten sind in Millisekunden angegeben. Jeder Durchlauf bestätigte alle 18 Distributionsdateien, null Cloud-Anfragen und keine Verbindungen zu externen IP-Adressen. [Berichte der Paketabnahme](https://github.com/MaKammi/MeetingPal/actions/runs/45433780389)
+
+| Paket | Start | Import | Wiedergabeaufbereitung | Transkription | Auswertung | PDF |
+|---|---:|---:|---:|---:|---:|---:|
+| Windows x64, Standard | 7.889 | 107 | 15 | 6.657 | 23.727 | 41 |
+| Windows x64, ohne WPAD | 6.752 | 89 | 11 | 6.076 | 18.444 | 37 |
+| macOS Intel | 11.412 | 130 | 46 | 205.188 | 266.432 | 67 |
+| macOS Apple Silicon | 5.024 | 1.299 | 30 | 34.380 | 226.763 | 59 |
+| Ubuntu Deb | 1.805 | 171 | 61 | 8.752 | 27.634 | 39 |
+| Ubuntu AppImage | 2.462 | 199 | 58 | 8.803 | 28.395 | 40 |
+
+Der öffentliche Updatefeed enthielt sechs Plattformziele. Die SHA-256-Prüfsummen aller 15 veröffentlichten Dateien stimmten mit den Build-Ergebnissen überein. Der Windows-Updater lud für eine simulierte ältere Installation 104.438.336 Byte ohne GitHub-Anmeldung herunter und bestätigte die Signatur für 0.1.4. [Veröffentlichte Dateien](https://github.com/MaKammi/MeetingPal/releases/tag/v0.1.4)
+
+Orca bestätigte im installierten Ubuntu-Paket Fokus, Beschriftungen und Dialogwechsel auf Deutsch und Englisch. [Orca-Abnahme](https://github.com/MaKammi/MeetingPal/actions/runs/45433780418)
 
 ## Lokal nachgewiesen (18. November 2026)
 
