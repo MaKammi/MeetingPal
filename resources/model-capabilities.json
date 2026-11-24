@@ -1,0 +1,15 @@
+[
+  {"provider":"local","model":"whisper-small","features":["audio","timestamps"]},
+  {"provider":"local","model":"whisper-turbo","features":["audio","timestamps"]},
+  {"provider":"local","model":"qwen-text","features":["text"]},
+  {"provider":"local","model":"qwen-vision","features":["text","image"]},
+  {"provider":"openai","model":"whisper-1","features":["audio","timestamps"]},
+  {"provider":"openai","model":"gpt-transcribe","features":["audio","audioStream"]},
+  {"provider":"openai","model":"gpt-4o-transcribe","features":["audio","audioStream"]},
+  {"provider":"openai","model":"gpt-4o-mini-transcribe","features":["audio","audioStream"]},
+  {"provider":"openai","model":"gpt-4o-mini-transcribe-2025-12-15","features":["audio","audioStream"]},
+  {"provider":"openai","model":"gpt-4o-transcribe-diarize","features":["audio","speakerLabels","timestamps","audioStream"]},
+  {"provider":"openai","model":"gpt-4.1-mini","features":["text","image"]},
+  {"provider":"anthropic","model":"claude-haiku-4-5","features":["text","image"]},
+  {"provider":"gemini","model":"gemini-2.5-flash","features":["text","image","video"]}
+]

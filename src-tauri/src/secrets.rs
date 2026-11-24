@@ -1,9 +1,9 @@
 use crate::domain::Provider;
 use std::{collections::HashMap, sync::Mutex};
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Secrets {
-    session: Mutex<HashMap<String, String>>,
+    session: std::sync::Arc<Mutex<HashMap<String, String>>>,
 }
 impl Secrets {
     pub fn set(&self, provider: &Provider, value: String) -> anyhow::Result<bool> {

@@ -1,0 +1,51 @@
+name: Installed release acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published version tag
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  installed:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, suffix: x64-setup.exe }
+          - { os: macos-15, suffix: aarch64.dmg }
+          - { os: macos-15-intel, suffix: x64.dmg }
+          - { os: ubuntu-24.04, suffix: amd64.deb }
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Install tracing and display tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y strace xvfb xauth dbus-x11
+      - name: Enable process and connection auditing on disposable Windows runner
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          auditpol /set /subcategory:"Process Creation" /success:enable
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          auditpol /set /subcategory:"Filtering Platform Connection" /success:enable /failure:enable
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Download and verify the public installer, then run installed checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          file="MeetingPal_${TAG#v}_$SUFFIX"
+          gh release download "$TAG" --pattern "$file" --pattern SHA256SUMS
+          python -c "import hashlib, pathlib, sys; p=pathlib.Path(sys.argv[1]); expected=dict(line.strip().split('  ',1)[::-1] for line in pathlib.Path('SHA256SUMS').read_text().splitlines()); assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()==expected[p.name]" "$file"
+          python scripts/check-installed.py "$file" acceptance.json "${TAG#v}" --test-ai
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installed-${{ matrix.os }}
+          path: acceptance.json

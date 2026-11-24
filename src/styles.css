@@ -114,7 +114,7 @@ h3 {
 }
 p {
   line-height: 1.7;
-  color: #73778b;
+  color: #666a7e;
 }
 small,
 .small {
@@ -122,7 +122,7 @@ small,
   line-height: 1.6;
 }
 .muted {
-  color: #7a7f94;
+  color: #696e83;
 }
 .primary,
 .secondary,
@@ -176,7 +176,7 @@ small,
   padding: 5px 0;
   font-size: 13px;
   font-weight: 600;
-  color: #7968d6;
+  color: #6d5cca;
 }
 .badge {
   display: inline-flex;
@@ -190,15 +190,15 @@ small,
   white-space: nowrap;
 }
 .neutral {
-  color: #777d90;
+  color: #62687b;
   background: #f2f3f7;
 }
 .lavender {
-  color: #7966cc;
+  color: #6451b7;
   background: #eae5fc;
 }
 .green {
-  color: #40876e;
+  color: #2d745b;
   background: #eaf5ef;
 }
 .amber {
@@ -260,7 +260,7 @@ small,
   font-size: 9px;
   letter-spacing: 1.5px;
   font-weight: 650;
-  color: #a0a4b2;
+  color: #6b6f7d;
   margin: 0 12px 12px;
 }
 .sidebar nav {
@@ -277,13 +277,13 @@ small,
   border-radius: 8px;
   font-size: 12px;
   font-weight: 550;
-  color: #818599;
+  color: #64687c;
 }
 .sidebar nav button:hover {
   background: #f8f7fc;
 }
 .sidebar nav button.selected {
-  color: #7a67cd;
+  color: #6855bb;
   background: #efecfa;
 }
 .nav-count {
@@ -333,12 +333,12 @@ small,
   gap: 6px;
   margin: 24px 5px 0;
   font-size: 10px;
-  color: #848a9d;
+  color: #696f82;
 }
 .version > span:last-child {
   margin-left: auto;
   font-size: 9px;
-  color: #b0b3c0;
+  color: #6b6e7b;
 }
 .online-dot {
   width: 5px;
@@ -377,7 +377,7 @@ small,
   padding: 0 41px;
   font-size: 12px;
   font-weight: 550;
-  color: #7c8195;
+  color: #686d81;
 }
 .topbar-right {
   display: flex;
@@ -389,7 +389,7 @@ small,
   height: 30px;
   border-radius: 50%;
   background: #e8e2f5;
-  color: #9a8bb5;
+  color: #675882;
   font-size: 10px;
   font-weight: 650;
 }
@@ -416,7 +416,7 @@ small,
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 1.6px;
-  color: #a29aac;
+  color: #70687a;
   margin-bottom: 11px;
 }
 .hero-card {
@@ -600,7 +600,7 @@ small,
 .stat > div > span {
   display: block;
   font-size: 10px;
-  color: #9ca0af;
+  color: #6a6e7d;
 }
 .section-heading {
   display: flex;
@@ -674,13 +674,13 @@ small,
 }
 .empty-state h3 {
   font-size: 14px;
-  color: #77788f;
+  color: #6a6b82;
   margin-bottom: 7px;
   font-weight: 550;
 }
 .empty-state p {
   font-size: 11px;
-  color: #a1a5b3;
+  color: #686c7a;
   margin-bottom: 16px;
 }
 .empty-state .text-button {
@@ -744,7 +744,7 @@ small,
 }
 .preview-banner {
   background: #fbf8ed;
-  color: #aa945b;
+  color: #7e682f;
   padding: 8px 41px;
   font-size: 11px;
   display: flex;
@@ -794,17 +794,20 @@ small,
 .toast .icon-button {
   color: #c9bfdc;
 }
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
+dialog.setup-modal, dialog.confirm-modal {
+  color: inherit;
+  border: 0;
+  margin: auto;
+  max-width: calc(100vw - 40px);
+}
+dialog.setup-modal { padding: 0; }
+dialog.setup-modal:not([open]) { display: none; }
+.setup-modal::backdrop, .confirm-modal::backdrop {
   background: #2c27404f;
   backdrop-filter: blur(5px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 25px;
 }
+:focus-visible { outline: 3px solid #51439a; outline-offset: 2px; }
+
 .setup-modal {
   background: #fff;
   width: 980px;
@@ -967,7 +970,7 @@ small,
   cursor: pointer;
   line-height: 1.6;
   font-size: 11px;
-  color: #7c788a;
+  color: #716d7f;
   margin: 17px 0;
 }
 .checkbox-row input {
@@ -1025,7 +1028,7 @@ small,
 .info-box {
   background: #f4f2fb;
   border-color: #e7e1f5;
-  color: #8d7ea9;
+  color: #70618c;
 }
 .error-text {
   display: block;
@@ -1091,14 +1094,14 @@ small,
 }
 .model-card p {
   font-size: 12px;
-  color: #9b94a7;
+  color: #736c7f;
   min-height: 40px;
 }
 .model-meta {
   display: flex;
   gap: 13px;
   font-size: 10px;
-  color: #a6a1b1;
+  color: #726d7d;
   margin: 2px 0 22px;
 }
 .model-actions {
@@ -1153,7 +1156,7 @@ small,
   border: 1px solid #edeaf4;
   background: #faf9fd;
   border-radius: 8px;
-  color: #948aa9;
+  color: #716786;
   overflow-wrap: anywhere;
 }
 .runtime-row {

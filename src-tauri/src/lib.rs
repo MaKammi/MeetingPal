@@ -1,3 +1,4 @@
+mod acceptance;
 pub mod capture;
 #[cfg(target_os = "linux")]
 mod capture_linux;
@@ -6,12 +7,15 @@ mod capture_mac_audio;
 pub mod commands;
 pub mod domain;
 pub mod exports;
+mod gemini_files;
 pub mod jobs;
 pub mod media;
+pub mod model_probe;
 pub mod models;
 pub mod providers;
 pub mod secrets;
 pub mod storage;
+mod transcription;
 pub mod updates;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
@@ -43,7 +47,31 @@ pub fn entry() -> anyhow::Result<()> {
         }
         return result;
     }
-    tauri::Builder::default()
+    // A separate, temporary library keeps installed-package checks away from user meetings.
+    let check = if args.get(1).is_some_and(|arg| arg == "--check-offline") {
+        anyhow::ensure!(
+            (3..=4).contains(&args.len()),
+            "Usage: --check-offline NEW_REPORT_PATH [INSTALLED_MODELS_DIRECTORY]"
+        );
+        Some((
+            tempfile::tempdir()?,
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&args[2])?,
+            args.get(3).map(std::path::PathBuf::from),
+        ))
+    } else {
+        None
+    };
+    let (library, check) = match check {
+        Some((directory, report, models)) => {
+            let root = directory.path().to_owned();
+            (Some(directory), Some((root, report, models)))
+        }
+        None => (None, None),
+    };
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -58,15 +86,22 @@ pub fn entry() -> anyhow::Result<()> {
                 })
                 .build(),
         )
-        .setup(|app| {
-            let root = app.path().app_data_dir()?;
+        .setup(move |app| {
+            let root = match &check {
+                Some((dir, _, _)) => dir.clone(),
+                None => app.path().app_data_dir()?,
+            };
+            let model_root = check
+                .as_ref()
+                .and_then(|(_, _, models)| models.clone())
+                .unwrap_or_else(|| root.join("models"));
             let directory = if cfg!(debug_assertions) {
                 std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries")
             } else {
                 app.path().resource_dir()?.join("binaries")
             };
             let state = Arc::new(AppState {
-                models: models::Models::new(root.join("models")),
+                models: models::Models::new(model_root),
                 store: storage::Store::open(root)?,
                 secrets: secrets::Secrets::default(),
                 runtimes: media::Runtimes { directory },
@@ -88,6 +123,23 @@ pub fn entry() -> anyhow::Result<()> {
             app.manage(state.clone());
             #[cfg(target_os = "linux")]
             app.manage(capture_linux::PortalSources::default());
+            if let Some((_, mut report, models)) = check {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    // Include WebView startup and the normal automatic-update decision in the observation.
+                    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                    let result = acceptance::offline(&state, models.is_some()).await;
+                    state.ai.shutdown().await;
+                    let code = if result.is_ok() { 0 } else { 1 };
+                    let value =
+                        result.unwrap_or_else(|e| serde_json::json!({"error":format!("{e:#}")}));
+                    let written = serde_json::to_writer_pretty(&mut report, &value).is_ok()
+                        && report.sync_all().is_ok();
+                    drop(state);
+                    handle.exit(if written { code } else { 1 });
+                });
+                return Ok(());
+            }
             jobs::start(state, app.handle().clone());
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
             if let Err(e) = app
@@ -133,6 +185,7 @@ pub fn entry() -> anyhow::Result<()> {
             commands::save_key,
             commands::delete_key,
             commands::provider_models,
+            commands::probe_model,
             commands::download_model,
             commands::cancel_download,
             commands::delete_model,
@@ -151,6 +204,13 @@ pub fn entry() -> anyhow::Result<()> {
             commands::delete_meeting,
             commands::export_meeting
         ])
-        .run(tauri::generate_context!())?;
+        .build(tauri::generate_context!())?;
+    if let Some(library) = library {
+        let code = app.run_return(|_, _| {});
+        library.close()?;
+        anyhow::ensure!(code == 0, "Installed offline check failed");
+    } else {
+        app.run(|_, _| {});
+    }
     Ok(())
 }

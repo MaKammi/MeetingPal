@@ -27,6 +27,7 @@ export interface MeetingConfig {
   analysis: ModelSelection;
   vision: ModelSelection;
   videoAnalysis: "none" | "frames" | "native";
+  streamTranscription?: boolean;
   maxRequests: number;
   consent: boolean;
   denoise: boolean;
@@ -178,6 +179,7 @@ export const defaultConfig = (): MeetingConfig => ({
   analysis: { provider: "local", model: "qwen-text" },
   vision: { provider: "local", model: "qwen-vision" },
   videoAnalysis: "none",
+  streamTranscription: false,
   maxRequests: 2000,
   consent: false,
   denoise: true,
@@ -192,7 +194,7 @@ export function bytes(value: number) {
     : `${Math.round(value / 1e6)} MB`;
 }
 export function disclosure(config: MeetingConfig) {
-  const transmissions: { task: string; provider: Provider; data: string }[] =
+  const transmissions: { task: string; provider: Provider; data: "audio" | "transcript" | "images" | "video + audio" }[] =
     [];
   if (config.transcription.provider !== "local")
     transmissions.push({

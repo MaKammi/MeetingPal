@@ -469,6 +469,7 @@ function SourceDialog({
       className="source-dialog"
       aria-labelledby="source-heading"
       onCancel={(e) => {
+        e.stopPropagation();
         e.preventDefault();
         back();
       }}

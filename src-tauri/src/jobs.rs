@@ -51,50 +51,44 @@ pub fn enqueue_final(state: &AppState, id: &str) -> Result<()> {
     Ok(())
 }
 pub fn start(state: Arc<AppState>, app: tauri::AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        loop {
-            match state.store.next_job() {
-                Ok(Some(job)) => {
-                    if job.kind == "finalize" {
-                        if let Ok(jobs) = state.store.jobs(&job.meeting_id) {
-                            if jobs.iter().any(|j| {
-                                j.kind == "transcribe"
-                                    && matches!(j.state.as_str(), "pending" | "running")
-                            }) {
-                                let _ = state.store.defer_job(&job.id);
-                                tokio::time::sleep(Duration::from_millis(200)).await;
-                                continue;
+    for _ in 0..2 {
+        let state = Arc::clone(&state);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                match state.store.next_job() {
+                    Ok(Some(job)) => {
+                        let result = process(&state, &job, &app).await;
+                        let retry = result
+                            .as_ref()
+                            .err()
+                            .is_some_and(|e| e.to_string().starts_with("Retryable:"))
+                            && job.attempts < 2;
+                        let error = result.err().map(|e| e.to_string());
+                        let _ = state.store.finish_job(&job.id, error.as_deref(), retry);
+                        if let Some(error) = error {
+                            if !retry {
+                                let _ = state.store.update(&job.meeting_id, |m| {
+                                    if !matches!(
+                                        m.status.as_str(),
+                                        "recording" | "paused" | "starting"
+                                    ) {
+                                        m.status = "needs_attention".into();
+                                    }
+                                    if !m.warnings.contains(&error) {
+                                        m.warnings.push(error.clone());
+                                    }
+                                    Ok(())
+                                });
                             }
                         }
+                        let _ = app.emit("meeting-changed", &job.meeting_id);
                     }
-                    let result = process(&state, &job, &app).await;
-                    let retry = result
-                        .as_ref()
-                        .err()
-                        .is_some_and(|e| e.to_string().starts_with("Retryable:"))
-                        && job.attempts < 2;
-                    let error = result.err().map(|e| e.to_string());
-                    let _ = state.store.finish_job(&job.id, error.as_deref(), retry);
-                    if let Some(error) = error {
-                        if !retry {
-                            let _ = state.store.update(&job.meeting_id, |m| {
-                                if !matches!(m.status.as_str(), "recording" | "paused" | "starting")
-                                {
-                                    m.status = "needs_attention".into();
-                                }
-                                if !m.warnings.contains(&error) {
-                                    m.warnings.push(error.clone());
-                                }
-                                Ok(())
-                            });
-                        }
-                    }
-                    let _ = app.emit("meeting-changed", &job.meeting_id);
+                    _ => tokio::time::sleep(Duration::from_millis(500)).await,
                 }
-                _ => tokio::time::sleep(Duration::from_millis(500)).await,
             }
-        }
-    });
+        });
+    }
 }
 async fn process(state: &AppState, job: &Job, app: &tauri::AppHandle) -> Result<()> {
     let meeting = state.store.load(&job.meeting_id)?;
@@ -105,7 +99,20 @@ async fn process(state: &AppState, job: &Job, app: &tauri::AppHandle) -> Result<
                 .iter()
                 .find(|m| m.id == job.payload)
                 .ok_or_else(|| anyhow::anyhow!("Audio segment no longer exists"))?;
-            let transcript = state.ai.transcribe(state, &meeting, segment).await?;
+            let preview = |text: &str| {
+                let _ = app.emit(
+                    "transcript-preview",
+                    serde_json::json!({"meetingId": meeting.id, "text": text}),
+                );
+            };
+            let transcript = state
+                .ai
+                .transcribe_with_progress(state, &meeting, segment, preview)
+                .await;
+            if meeting.config.stream_transcription {
+                preview("");
+            }
+            let transcript = transcript?;
             state.store.update(&meeting.id, |m| {
                 let prefix = format!("{}-", segment.id);
                 let edited: Vec<_> = m
@@ -114,11 +121,13 @@ async fn process(state: &AppState, job: &Job, app: &tauri::AppHandle) -> Result<
                     .filter(|t| t.id.starts_with(&prefix) && t.edited)
                     .cloned()
                     .collect();
-                m.transcript.retain(|t| !t.id.starts_with(&prefix));
-                for t in transcript {
-                    m.transcript
-                        .push(edited.iter().find(|e| e.id == t.id).cloned().unwrap_or(t));
-                }
+                m.transcript
+                    .retain(|t| !t.id.starts_with(&prefix) || t.edited);
+                m.transcript.extend(transcript.into_iter().filter(|t| {
+                    !edited
+                        .iter()
+                        .any(|e| e.id == t.id || (e.start_ms < t.end_ms && t.start_ms < e.end_ms))
+                }));
                 m.transcript.sort_by_key(|t| t.start_ms);
                 Ok(())
             })?;
@@ -212,7 +221,28 @@ pub async fn refine_transcript(
     if let Some(selection) = &meeting.config.final_transcription {
         final_config.config.transcription = selection.clone();
     }
-    for (index, group) in meeting.media.chunks(12).enumerate() {
+    // Speaker IDs are request-scoped. Use up to ten minutes of 16 kHz mono PCM
+    // (19.2 MB) per diarization request while keeping existing ASR cache boundaries.
+    let diarized = crate::transcription::model_supports(
+        final_config.config.transcription.provider.key(),
+        &final_config.config.transcription.model,
+        "speakerLabels",
+    );
+    let mut pending = meeting.media.as_slice();
+    let groups = std::iter::from_fn(move || {
+        let first = pending.first()?;
+        let count = if diarized {
+            pending
+                .partition_point(|s| s.end_ms.saturating_sub(first.start_ms) <= 600_000)
+                .max(1)
+        } else {
+            pending.len().min(12)
+        };
+        let (group, rest) = pending.split_at(count);
+        pending = rest;
+        Some(group)
+    });
+    for (index, group) in groups.enumerate() {
         let start_ms = group.first().unwrap().start_ms;
         let end_ms = group.last().unwrap().end_ms;
         let current = state.store.load(&meeting.id)?;

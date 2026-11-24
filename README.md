@@ -16,7 +16,7 @@ Desktop-App für lokale Meeting-Aufnahmen und KI-gestützte Protokolle. MeetingP
 - Exporte: Markdown, PDF mit eingebetteter Schrift, JSON, SRT und VTT.
 - Schlüssel im Betriebssystem-Schlüsselspeicher; Sitzungs-Fallback. Keine zusätzliche Bibliotheksverschlüsselung und keine Telemetrie.
 
-Live bezeichnet die Verarbeitung abgeschlossener Audioabschnitte, kein wortweises API-Streaming. Automatische Sprechertrennung ist in dieser Version nicht implementiert. Cloud-Zeitmarken entsprechen derzeit den Audioabschnitten. Modellleistung und Rückstände sind geräteabhängig.
+Live verarbeitet abgeschlossene Audioabschnitte. Unterstützte OpenAI-Modelle zeigen auf Wunsch bereits während der Verarbeitung Text an. `gpt-4o-transcribe-diarize` liefert Sprecher und Zeitmarken. Die Sprecherkennungen gelten für den jeweiligen Audioabschnitt und lassen sich nachträglich bearbeiten. In der Modellauswahl lassen sich Cloud-Aufgaben mit öffentlichem Testaudio oder synthetischen Inhalten prüfen. Dabei können API-Kosten entstehen.
 
 ## Start aus dem Quellcode
 

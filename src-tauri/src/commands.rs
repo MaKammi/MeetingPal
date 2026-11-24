@@ -131,6 +131,22 @@ pub async fn provider_models(
         .map_err(message)
 }
 #[tauri::command]
+pub async fn probe_model(
+    state: State<'_, Arc<AppState>>,
+    selection: ModelSelection,
+    task: crate::model_probe::Task,
+) -> Response<crate::model_probe::Report> {
+    let _work = state.updates.working()?;
+    crate::model_probe::run(
+        state.secrets.clone(),
+        state.runtimes.clone(),
+        selection,
+        task,
+    )
+    .await
+    .map_err(message)
+}
+#[tauri::command]
 pub async fn download_model(
     state: State<'_, Arc<AppState>>,
     app: tauri::AppHandle,

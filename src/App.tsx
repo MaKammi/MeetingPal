@@ -40,6 +40,8 @@ import {
 } from "lucide-react";
 import { api, desktop } from "./api";
 import { VideoSourceField } from "./VideoSourcePicker";
+import { Modal } from "./Modal";
+import capabilities from "../resources/model-capabilities.json";
 import { useUpdates, updateError } from "./useUpdates";
 import { version as appVersion } from "../package.json";
 import { bytes, defaultConfig, disclosure, duration } from "./types";
@@ -88,7 +90,22 @@ function App() {
   });
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const currentId = useRef<string | null>(null);
+  const librarySearch = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const searchLibrary = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && !document.querySelector("dialog[open]")) {
+        event.preventDefault();
+        setPage("library");
+        requestAnimationFrame(() => librarySearch.current?.focus());
+      }
+    };
+    window.addEventListener("keydown", searchLibrary);
+    return () => window.removeEventListener("keydown", searchLibrary);
+  }, []);
   const t: Translate = (de, en) => (boot?.settings.locale === "en" ? en : de);
+  useEffect(() => {
+    document.documentElement.lang = boot?.settings.locale === "en" ? "en" : "de";
+  }, [boot?.settings.locale]);
   const load = useCallback(async () => {
     const data = await api<Bootstrap>("bootstrap");
     setBoot(data);
@@ -259,8 +276,8 @@ function App() {
           <Plus size={18} />
           {t("Meeting aufnehmen", "Record meeting")}
         </button>
-        <div className="nav-label">WORKSPACE</div>
-        <nav aria-label="Main">
+        <div className="nav-label">{t("ARBEITSBEREICH", "WORKSPACE")}</div>
+        <nav aria-label={t("Hauptnavigation", "Main navigation")}>
           <button
             className={
               page === "library" || page === "meeting" ? "selected" : ""
@@ -337,7 +354,7 @@ function App() {
             </span>
             <button
               className="avatar"
-              aria-label="Settings"
+              aria-label={t("Einstellungen öffnen", "Open settings")}
               onClick={() => setPage("settings")}
             >
               MP
@@ -365,7 +382,7 @@ function App() {
             <>
               <div className="page-heading">
                 <div>
-                  <div className="eyebrow">MEETINGPAL WORKSPACE</div>
+                  <div className="eyebrow">MeetingPal</div>
                   <h1>
                     {t(
                       "Mehr im Gespräch. Weniger im Protokoll.",
@@ -492,6 +509,9 @@ function App() {
                 <label className="search-box">
                   <Search size={16} />
                   <input
+                    ref={librarySearch}
+                    aria-keyshortcuts="Control+k Meta+k"
+                    title={t("Bibliothek durchsuchen (Strg/⌘ + K)", "Search library (Ctrl/⌘ + K)")}
                     aria-label={t("Meetings durchsuchen", "Search meetings")}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -620,7 +640,7 @@ function App() {
           <span>{notice}</span>
           <button
             className="icon-button"
-            aria-label="Dismiss"
+            aria-label={t("Meldung schließen", "Dismiss notification")}
             onClick={() => setNotice("")}
           >
             <X size={17} />
@@ -674,7 +694,11 @@ function ModelPicker({
   onChange,
   task,
   t,
+  online,
+  nativeVideo = false,
 }: {
+  online: boolean;
+  nativeVideo?: boolean;
   label: string;
   value: ModelSelection;
   onChange: (v: ModelSelection) => void;
@@ -684,9 +708,39 @@ function ModelPicker({
   const [models, setModels] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const providers: Provider[] = task.endsWith("transcription")
-    ? ["local", "openai"]
-    : ["local", "openai", "anthropic", "gemini"];
+  const [probing, setProbing] = useState(false);
+  const [receipt, setReceipt] = useState<{ key: string; text: string } | null>(
+    null,
+  );
+  const input = task.endsWith("transcription")
+    ? "audio"
+    : task === "vision"
+      ? nativeVideo
+        ? "video"
+        : "image"
+      : "text";
+  const key = [value.provider, value.model, input].join("/");
+  const features =
+    capabilities.find(
+      (m) => m.provider === value.provider && m.model === value.model,
+    )?.features ?? [];
+  const featureNames: Record<string, string> = {
+    audio: t("Transkription", "Transcription"),
+    text: t("Text", "Text"),
+    image: t("Bilder", "Images"),
+    video: t("Videodateien", "Video files"),
+    timestamps: t("Zeitmarken", "Timestamps"),
+    speakerLabels: t("Sprecher pro Abschnitt", "Speakers per section"),
+    audioStream: t("Live-Vorschau", "Streaming preview"),
+  };
+  const suggestions = capabilities
+    .filter((m) => m.provider === value.provider && m.features.includes(input))
+    .map((m) => m.model);
+  const providers: Provider[] = nativeVideo
+    ? ["gemini"]
+    : task.endsWith("transcription")
+      ? ["local", "openai"]
+      : ["local", "openai", "anthropic", "gemini"];
   const local = task.endsWith("transcription")
     ? ["whisper-small", "whisper-turbo"]
     : task === "vision"
@@ -697,7 +751,7 @@ function ModelPicker({
       <label>{label}</label>
       <div className="field-row">
         <select
-          aria-label={`${label} provider`}
+          aria-label={`${label} ${t("Anbieter", "provider")}`}
           value={value.provider}
           onChange={(e) => {
             const provider = e.target.value as Provider;
@@ -716,7 +770,7 @@ function ModelPicker({
         </select>
         {value.provider === "local" ? (
           <select
-            aria-label={`${label} model`}
+            aria-label={`${label} ${t("Modell", "model")}`}
             value={value.model}
             onChange={(e) => onChange({ ...value, model: e.target.value })}
           >
@@ -727,14 +781,14 @@ function ModelPicker({
         ) : (
           <>
             <input
-              aria-label={`${label} model`}
+              aria-label={`${label} ${t("Modell", "model")}`}
               value={value.model}
               list={`models-${task}`}
               placeholder={t("Modell-ID auswählen", "Choose model ID")}
               onChange={(e) => onChange({ ...value, model: e.target.value })}
             />
             <datalist id={`models-${task}`}>
-              {models.map((m) => (
+              {Array.from(new Set([...suggestions, ...models])).map((m) => (
                 <option key={m} value={m} />
               ))}
             </datalist>
@@ -742,7 +796,7 @@ function ModelPicker({
               type="button"
               className="icon-button"
               title={t("Modelle vom Anbieter laden", "Load provider models")}
-              disabled={loading}
+              disabled={loading || !online}
               onClick={async () => {
                 setLoading(true);
                 try {
@@ -770,7 +824,59 @@ function ModelPicker({
           </>
         )}
       </div>
-      {error && <small className="error-text">{error}</small>}
+      {!!features.length && (
+        <small>
+          {features.map((feature) => featureNames[feature]).join(" · ")}
+        </small>
+      )}
+      {online &&
+        value.provider !== "local" &&
+        value.model.trim() &&
+        desktop && (
+          <button
+            type="button"
+            className="text-button"
+            disabled={probing}
+            title={t(
+              "Verwendet feste Testdaten und kann API-Kosten verursachen.",
+              "Uses fixed sample data and may incur API charges.",
+            )}
+            onClick={async () => {
+              setProbing(true);
+              try {
+                const result = await api<{
+                  elapsedMs: number;
+                  requests: number;
+                }>("probe_model", { selection: value, task: input });
+                setReceipt({
+                  key,
+                  text:
+                    t("Test bestanden", "Test passed") +
+                    " · " +
+                    (result.elapsedMs / 1000).toFixed(1) +
+                    " s",
+                });
+              } catch (e) {
+                setReceipt({ key, text: String(e) });
+              } finally {
+                setProbing(false);
+              }
+            }}
+          >
+            {probing
+              ? t("Test läuft …", "Testing …")
+              : t(
+                  "Mit Testdaten beim Anbieter prüfen",
+                  "Test with sample data at provider",
+                )}
+          </button>
+        )}
+      {receipt?.key === key && <small role="status">{receipt.text}</small>}
+      {error && (
+        <small className="error-text" role="alert">
+          {error}
+        </small>
+      )}
     </div>
   );
 }
@@ -842,19 +948,13 @@ function Setup({
     c.consent &&
     c.transcription.model &&
     c.analysis.model &&
+    (!c.finalTranscription || c.finalTranscription.model.trim()) &&
+    (c.videoAnalysis === "none" || c.vision.model.trim()) &&
+    (c.videoAnalysis !== "native" || c.vision.provider === "gemini") &&
     (!c.offline || !transmissions.length) &&
     (c.video.kind === "none" || file || c.video.id);
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <section
-        className="setup-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="setup-title"
-      >
+    <Modal className="setup-modal" labelledBy="setup-title" onClose={() => { if (!busy) onClose(); }}>
         <div className="modal-header">
           <div>
             <span className="eyebrow">
@@ -868,7 +968,7 @@ function Setup({
           </div>
           <button
             className="icon-button"
-            aria-label="Close"
+            aria-label={t("Schließen", "Close")}
             onClick={onClose}
             disabled={busy}
           >
@@ -1072,10 +1172,16 @@ function Setup({
             <ModelPicker
               label={t("Transkription", "Transcription")}
               task="transcription"
+              online={!c.offline}
               value={c.transcription}
               t={t}
               onChange={(transcription) => patch({ transcription })}
             />
+            {c.mode !== "post" && !c.offline && capabilities.some((m) => m.provider === c.transcription.provider && m.model === c.transcription.model && m.features.includes("audioStream")) && (
+              <label className="checkbox-row"><input type="checkbox" checked={!!c.streamTranscription} onChange={(e) => patch({streamTranscription:e.target.checked})}/>
+                {t("Wörter während der Transkription anzeigen", "Show words as each section is transcribed")}
+              </label>
+            )}
             <label className="checkbox-row">
               <input
                 type="checkbox"
@@ -1097,6 +1203,7 @@ function Setup({
               <ModelPicker
                 label={t("Endgültiges Transkript", "Final transcript")}
                 task="final-transcription"
+                online={!c.offline}
                 value={c.finalTranscription}
                 t={t}
                 onChange={(finalTranscription) => patch({ finalTranscription })}
@@ -1111,6 +1218,7 @@ function Setup({
             <ModelPicker
               label={t("Auswertung & Assistenz", "Analysis & assistance")}
               task="analysis"
+              online={!c.offline}
               value={c.analysis}
               t={t}
               onChange={(analysis) => patch({ analysis })}
@@ -1123,8 +1231,9 @@ function Setup({
                     value={c.videoAnalysis}
                     onChange={(e) =>
                       patch({
-                        videoAnalysis: e.target
-                          .value as MeetingConfig["videoAnalysis"],
+                        videoAnalysis: e.target.value as MeetingConfig["videoAnalysis"],
+                        ...(e.target.value === "native" && c.vision.provider !== "gemini"
+                          ? {vision: {provider: "gemini" as const, model: ""}} : {}),
                       })
                     }
                   >
@@ -1149,6 +1258,8 @@ function Setup({
                   <ModelPicker
                     label={t("Bild-/Videomodell", "Vision model")}
                     task="vision"
+                    online={!c.offline}
+                    nativeVideo={c.videoAnalysis === "native"}
                     value={c.vision}
                     t={t}
                     onChange={(vision) => patch({ vision })}
@@ -1217,7 +1328,7 @@ function Setup({
                     <Globe size={15} />
                     <span>
                       <strong>{providerNames[d.provider]}</strong>
-                      <small>{d.data}</small>
+                      <small>{{audio:t("Audiomix", "Mixed audio"), transcript:t("Transkript", "Transcript"), images:t("Bilder", "Images"), "video + audio":t("Videoclip mit Ton · Datei-Upload", "Video with audio · file upload")}[d.data]}</small>
                     </span>
                   </div>
                 ))
@@ -1321,8 +1432,7 @@ function Setup({
             </button>
           </div>
         </footer>
-      </section>
-    </div>
+    </Modal>
   );
 }
 
@@ -1345,7 +1455,7 @@ function ModelsPage({
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">ON-DEVICE AI</div>
+          <div className="eyebrow">{t("LOKALE KI", "ON-DEVICE AI")}</div>
           <h1>
             {t(
               "Intelligenz, die bei dir bleibt.",
@@ -1536,7 +1646,7 @@ function SettingsPage({
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">DEIN WORKSPACE</div>
+          <div className="eyebrow">{t("DEIN ARBEITSBEREICH", "YOUR WORKSPACE")}</div>
           <h1>{t("So, wie du arbeitest.", "The way you work.")}</h1>
           <p>
             {t(
@@ -1574,8 +1684,8 @@ function SettingsPage({
                 <input
                   type="password"
                   autoComplete="off"
-                  aria-label={`${providerNames[provider]} API key`}
-                  placeholder="API-Key"
+                  aria-label={`${providerNames[provider]} ${t("API-Schlüssel", "API key")}`}
+                  placeholder={t("API-Schlüssel", "API key")}
                   value={keys[provider] ?? ""}
                   onChange={(e) =>
                     setKeys({ ...keys, [provider]: e.target.value })
@@ -1611,7 +1721,7 @@ function SettingsPage({
                 {boot.keys[provider] && (
                   <button
                     className="icon-button"
-                    aria-label="Remove key"
+                    aria-label={t("Schlüssel entfernen", "Remove key")}
                     onClick={() =>
                       act(async () => {
                         await api("delete_key", { provider });
@@ -1720,6 +1830,7 @@ function SettingsPage({
           <ModelPicker
             task="transcription"
             label={t("Transkription", "Transcription")}
+            online={!settings.defaultConfig.offline}
             value={settings.defaultConfig.transcription}
             onChange={(transcription) =>
               setSettings({
@@ -1732,6 +1843,7 @@ function SettingsPage({
           <ModelPicker
             task="analysis"
             label={t("Auswertung", "Analysis")}
+            online={!settings.defaultConfig.offline}
             value={settings.defaultConfig.analysis}
             onChange={(analysis) =>
               setSettings({
@@ -1831,6 +1943,16 @@ function MeetingPage({
   const active = ["starting", "recording", "paused"].includes(m.status);
   const [tab, setTab] = useState("overview");
   const [query, setQuery] = useState("");
+  const [draft, setDraft] = useState("");
+  useEffect(() => {
+    setDraft("");
+    if (!desktop || !m.config.streamTranscription) return;
+    let active = true;
+    const subscription = listen<{meetingId: string; text: string}>("transcript-preview", ({payload}) => {
+      if (active && payload.meetingId === m.id) setDraft(payload.text);
+    });
+    return () => { active = false; void subscription.then((unlisten) => unlisten()); };
+  }, [m.id, m.config.streamTranscription]);
   const [question, setQuestion] = useState("");
   const [edit, setEdit] = useState<TranscriptSegment | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -1943,7 +2065,7 @@ function MeetingPage({
       <div className="page-heading detail-heading">
         <div>
           <div className="eyebrow">
-            {new Date(m.createdAt).toLocaleString()}
+            {new Date(m.createdAt).toLocaleString(t("de-DE", "en-US"))}
           </div>
           <h1>{m.config.title}</h1>
           <div className="detail-meta">
@@ -1964,7 +2086,7 @@ function MeetingPage({
         </div>
         <div className="field-row">
           <select
-            aria-label="Export"
+            aria-label={t("Exportformat", "Export format")}
             defaultValue=""
             onChange={(e) => {
               exported(e.target.value);
@@ -2078,7 +2200,7 @@ function MeetingPage({
             type="number"
             min={1}
             max={100000}
-            aria-label="Request budget"
+            aria-label={t("Anfragelimit", "Request budget")}
             value={budget}
             onChange={(e) => setBudget(Number(e.target.value))}
           />
@@ -2251,6 +2373,7 @@ function MeetingPage({
         ))}
       {tab === "transcript" && (
         <>
+          {draft && <p className="transcript-draft"><strong>{t("Vorläufig", "Provisional")}</strong> {draft}</p>}
           <div className="section-heading">
             <p className="muted small">
               {t(
@@ -2261,6 +2384,7 @@ function MeetingPage({
             <label className="search-box">
               <Search size={15} />
               <input
+                aria-label={t("Transkript durchsuchen", "Search transcript")}
                 placeholder={t(
                   "Transkript durchsuchen …",
                   "Search transcript …",
@@ -2284,6 +2408,7 @@ function MeetingPage({
                   {edit?.id === s.id ? (
                     <div className="transcript-edit">
                       <input
+                        aria-label={t("Sprechername", "Speaker name")}
                         value={edit.speaker ?? ""}
                         placeholder={t(
                           "Sprechername (optional)",
@@ -2294,6 +2419,7 @@ function MeetingPage({
                         }
                       />
                       <textarea
+                        aria-label={t("Transkripttext", "Transcript text")}
                         value={edit.text}
                         onChange={(e) =>
                           setEdit({ ...edit, text: e.target.value })
@@ -2373,7 +2499,7 @@ function MeetingPage({
               <input
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                placeholder="Projekt, Planung"
+                placeholder={t("Projekt, Planung", "Project, planning")}
               />
             </label>
           </div>
@@ -2479,7 +2605,7 @@ function MeetingPage({
             <button
               className="primary"
               disabled={busy || !question.trim() || !m.transcript.length}
-              aria-label="Send"
+              aria-label={t("Frage senden", "Send question")}
             >
               {busy ? (
                 <LoaderCircle size={19} className="spin" />
@@ -2501,7 +2627,7 @@ function MeetingPage({
             <Stat
               icon={<Cpu size={19} />}
               label={t("Gemeldete Tokens", "Reported tokens")}
-              value={m.tokens.toLocaleString()}
+              value={m.tokens.toLocaleString(t("de-DE", "en-US"))}
             />
             <Stat
               icon={<Check size={19} />}
@@ -2557,10 +2683,9 @@ function MeetingPage({
         </section>
       )}
       {deleteChoice !== null && (
-        <div className="modal-backdrop">
-          <section className="confirm-modal" role="dialog" aria-modal="true">
+        <Modal className="confirm-modal" labelledBy="delete-title" onClose={() => setDeleteChoice(null)}>
             <Trash2 size={28} />
-            <h2>
+            <h2 id="delete-title">
               {deleteChoice
                 ? t("Mediendateien löschen?", "Delete media files?")
                 : t(
@@ -2605,8 +2730,7 @@ function MeetingPage({
                 {t("Löschen", "Delete")}
               </button>
             </div>
-          </section>
-        </div>
+        </Modal>
       )}
     </>
   );

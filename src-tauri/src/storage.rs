@@ -22,16 +22,18 @@ pub fn atomic_json(path: &Path, value: &impl Serialize) -> Result<()> {
     serde_json::to_writer_pretty(&mut file, value)?;
     file.write_all(b"\n")?;
     file.sync_all()?;
-    // Windows rename does not replace an existing file. Keep a recovery copy during replacement.
+    // Older libraries may have a previous or pending file from the replacement sequence.
+    // std::fs::rename replaces a regular file atomically on the supported local filesystems.
     let backup = path.with_extension("json.previous");
     if path.exists() {
         fs::copy(path, &backup)?;
     }
-    #[cfg(target_os = "windows")]
-    if path.exists() {
-        fs::remove_file(path)?;
-    }
+    drop(file);
     fs::rename(&tmp, path)?;
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        fs::File::open(parent)?.sync_all()?;
+    }
     if backup.exists() {
         let _ = fs::remove_file(backup);
     }
@@ -86,6 +88,7 @@ impl Store {
             CREATE TABLE IF NOT EXISTS meetings(id TEXT PRIMARY KEY, summary TEXT NOT NULL, search TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY, meeting_id TEXT NOT NULL, kind TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, error TEXT, next_at INTEGER NOT NULL DEFAULT 0);
             CREATE INDEX IF NOT EXISTS jobs_pending ON jobs(state,next_at);
+            CREATE INDEX IF NOT EXISTS jobs_meeting_state ON jobs(meeting_id,state);
             UPDATE jobs SET state='pending' WHERE state='running';")?;
         let store = Self {
             root,
@@ -178,7 +181,14 @@ impl Store {
     }
     pub fn next_job(&self) -> Result<Option<Job>> {
         let db = self.db.lock().unwrap();
-        let mut stmt = db.prepare("SELECT id,meeting_id,kind,payload,state,attempts,error FROM jobs WHERE state='pending' AND next_at <= unixepoch() ORDER BY rowid LIMIT 1")?;
+        // The process-wide library lock and this mutex keep selection and claim atomic.
+        // Serialize each meeting so final ASR, cached sections and user edits never race a live job.
+        let mut stmt = db.prepare("SELECT j.id,j.meeting_id,j.kind,j.payload,j.state,j.attempts,j.error FROM jobs j
+            WHERE j.state='pending' AND j.next_at <= unixepoch()
+              AND NOT EXISTS (SELECT 1 FROM jobs p WHERE p.meeting_id=j.meeting_id AND p.state='running')
+              AND NOT EXISTS (SELECT 1 FROM jobs p WHERE p.meeting_id=j.meeting_id AND p.state='pending'
+                AND p.kind <> 'finalize' AND (j.kind='finalize' OR p.rowid < j.rowid))
+            ORDER BY CASE j.kind WHEN 'transcribe' THEN 0 WHEN 'live_analysis' THEN 1 ELSE 2 END, j.rowid LIMIT 1")?;
         let job = stmt.query_map([], job_row)?.next().transpose()?;
         if let Some(job) = &job {
             db.execute(
@@ -214,10 +224,6 @@ impl Store {
     }
     pub fn retry_jobs(&self, id: &str) -> Result<()> {
         self.db.lock().unwrap().execute("UPDATE jobs SET state='pending',attempts=0,error=NULL,next_at=0 WHERE meeting_id=?1 AND state IN ('failed','paused')", [id])?;
-        Ok(())
-    }
-    pub fn defer_job(&self, id: &str) -> Result<()> {
-        self.db.lock().unwrap().execute("UPDATE jobs SET state='pending',attempts=max(0,attempts-1),next_at=unixepoch()+2 WHERE id=?1", [id])?;
         Ok(())
     }
     pub fn has_active_jobs(&self) -> Result<bool> {
@@ -361,6 +367,36 @@ mod tests {
         drop(store);
         let reopened = Store::open(d.path().to_owned()).unwrap();
         assert!(reopened.next_job().unwrap().is_some());
+    }
+    #[test]
+    fn parallel_workers_prioritize_live_work_and_preserve_meeting_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path().to_owned()).unwrap();
+        for (id, meeting, kind) in [
+            ("a", "first", "finalize"),
+            ("b", "live", "transcribe"),
+            ("c", "live", "finalize"),
+            ("d", "live", "transcribe"),
+        ] {
+            store
+                .enqueue(&Job {
+                    id: id.into(),
+                    meeting_id: meeting.into(),
+                    kind: kind.into(),
+                    payload: String::new(),
+                    state: "pending".into(),
+                    attempts: 0,
+                    error: None,
+                })
+                .unwrap();
+        }
+        assert_eq!(store.next_job().unwrap().unwrap().id, "b");
+        assert_eq!(store.next_job().unwrap().unwrap().id, "a");
+        assert!(store.next_job().unwrap().is_none());
+        store.finish_job("b", None, false).unwrap();
+        assert_eq!(store.next_job().unwrap().unwrap().id, "d");
+        store.finish_job("d", None, false).unwrap();
+        assert_eq!(store.next_job().unwrap().unwrap().id, "c");
     }
     #[test]
     fn interrupted_recording_recovers_only_committed_segments() {

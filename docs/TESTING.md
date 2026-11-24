@@ -43,6 +43,37 @@ Zielgeräte: Windows 11 x64; macOS 14.2+ Intel und Apple Silicon; Ubuntu 24.04 G
 - Bei einem Versionstag prüft der Releasejob die Manifestdaten jeder Plattform, verifiziert die Updatepakete mit dem öffentlichen Schlüssel und überprüft die SHA-256-Werte im GitHub-Entwurf. Nutzer erreichen die Installer und den Updatefeed über das öffentliche Release.
 - Nach der Veröffentlichung prüft `cargo test --manifest-path src-tauri/Cargo.toml --test published_update -- --ignored --nocapture` den anonymen öffentlichen Feed mit dem echten Tauri-Updater. Eine simulierte ältere Version lädt das signierte Plattformpaket herunter, die aktuelle Version meldet keinen Updatebedarf. Der Test führt keinen Installer aus.
 
+## Nachweise für 0.1.2 vom 24. November 2026
+
+Die Windows-Entwicklungsmaschine lief mit Windows 11 Pro (Build 26300) auf einem Intel Core i7-1265U. Der erzwungene Abbruch eines separaten Testprozesses ließ drei vollständige Fünfsekundensegmente einschließlich beider Originalspuren und Audiomix wiederherstellen. Der teilweise geschriebene vierte Abschnitt gelangte nicht ins Manifest. Die drei Commit-Zeiten im Debug-Lauf betrugen 52,5, 61,6 und 53,6 ms. Ein Stromausfall und die Capture-Hardware sind eigene Prüffälle.
+
+Die Cloud-Abnahme verwendet dieselben Adapter wie die Modellauswahl. Für die folgenden Stichproben waren die Zugangsdaten in MeetingPal hinterlegt.
+
+| Anbieter und Modell | Durchgeführter Aufruf | Ergebnis |
+|---|---|---|
+| OpenAI `gpt-4o-transcribe-diarize` | Öffentliches Testaudio, fortlaufende Sprechersegmente und Zeitmarken | Bestanden |
+| OpenAI `gpt-4o-mini-transcribe` | Dasselbe Audio mit Text-Deltas und abgeschlossenem Transkript | Bestanden |
+| OpenAI `gpt-4.1-mini` und Anthropic `claude-haiku-4-5` | Strukturierte Auswertung eines synthetischen Transkripts mit Beleg-ID | Beide bestanden |
+| Gemini `gemini-2.5-flash` | Synthetisches WebM hochladen, verarbeiten, beschreiben und löschen | Bestanden |
+
+Die lokalen UI-Tests prüfen die Tastaturbedienung der verschachtelten Dialoge, die Fokusrückgabe, die deutsch- und englischsprachige Modellauswahl und die Bibliothekssuche. Die automatisierte WCAG-Prüfung (axe-core) findet in Bibliothek, Aufnahme-Dialog, Modellkatalog und Einstellungen keine Verstöße der geprüften Stufen A/AA. Manuelle Prüfungen mit Screenreadern und auf weiteren Plattformen bleiben Teil der Abnahme.
+
+Der Befehl `cargo test --manifest-path src-tauri/Cargo.toml --test cloud_models -- --ignored --nocapture --test-threads=1` wiederholt die kostenpflichtigen API-Tests. Ein anderes Modell lässt sich direkt im Auswahldialog mit Testdaten prüfen.
+
+### Synchronität auf Geräten messen
+
+Für die Messung eine ruhige Testumgebung mit kontrolliertem Mikrofoneingang verwenden. Alle 60 Sekunden ein gemeinsames sichtbares und hörbares Referenzsignal abspielen, beispielsweise einen weißen Vollbildblitz auf Schwarz und einen gleichzeitigen 250-ms-Ton. Das Signal muss auf beiden Audiospuren erscheinen. Die Aufnahme vor dem ersten Signal starten, mindestens zwei Stunden laufen lassen und die Wiedergabe vorbereiten. Die Zeitauflösung der Auswertung beträgt 10 ms für Audio und rund 17 ms für Video. Das Skript prüft Dauer, durchgängige Segmente, Markeranzahl und die maximale paarweise Abweichung.
+
+```sh
+python scripts/measure-capture.py MEETINGORDNER --device "OS, Hardware, Skalierung, Eingabe und Ausgabe" --ffmpeg PFAD_ZU_FFMPEG
+```
+
+Für die Audio-Abnahme dient zusätzlich `--audio-only`. `python scripts/test-measure-capture.py` kontrolliert die Messung mit synchronen, absichtlich verspäteten und fehlenden Signalen. Der Rust-Test für zwei simulierte Stunden verwendet unabhängige Geräteuhren mit ±200 ppm und 0–3 ms Zustellschwankung. Im Windows-Test lag die berechnete obere Grenze der Spurabweichung bei 38,00 ms.
+
+### Veröffentlichte Pakete prüfen
+
+Der GitHub-Workflow **Installed release acceptance** lädt die Installer des angegebenen Tags, vergleicht SHA-256, prüft mitgelieferte Lizenz- und Quelldateien und startet die installierte Anwendung in einer temporären Bibliothek. Die vorab verifizierten Whisper- und Qwen-Modelle bleiben beim Netzwerktest lokal. Der Test umfasst den WebView-Start, Import des öffentlichen Benchmark-Audios, Wiedergabeaufbereitung, echte lokale Inferenz und PDF-Export. Für jedes Ziel entsteht ein JSON-Bericht mit Laufzeiten. Unter Linux beobachtet `strace` auch die Kindprozesse, unter Windows die Filtering Platform zusammen mit der Prozessüberwachung. macOS verwendet ein Profil mit gesperrtem externem IP-Verkehr. Auf einem eigenen Rechner führt `--check-offline NEUE_BERICHTSDATEI [MODELLORDNER]` denselben Produktdurchlauf aus. Ohne Modellordner entfallen die Inferenzmessungen.
+
 ## Lokal nachgewiesen (18. November 2026)
 
 - Windows: Frontend-Build, Unit-Tests und Browser-Interaktion erfolgreich.

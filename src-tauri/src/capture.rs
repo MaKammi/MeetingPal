@@ -295,6 +295,17 @@ struct AudioLane {
     received: bool,
     warned: bool,
 }
+// Slowly correct independent hardware clocks without turning scheduling jitter into gaps.
+fn timeline_frame(anchor: &mut Option<(u64, f64)>, index: u64, frames: u64, active_ms: u64) -> u64 {
+    let observed = active_ms as f64 * 48.0 - frames as f64;
+    let (initial_index, position) = anchor.get_or_insert((index, observed.max(0.0)));
+    let delta = index.saturating_sub(*initial_index) as f64;
+    let drift = observed - (*position + delta);
+    if drift.abs() > 960.0 {
+        *position += drift.clamp(-4800.0, 4800.0) * 0.002;
+    }
+    (*position + delta).max(0.0) as u64
+}
 impl AudioLane {
     fn open(kind: flexaudio::SourceKind, device_id: Option<String>) -> Result<Self> {
         #[cfg(target_os = "macos")]
@@ -344,18 +355,12 @@ impl AudioLane {
                 continue;
             }
             self.peak = self.peak.max(chunk.peak);
-            let observed = active_ms as f64 * 48.0 - chunk.frames as f64;
-            let anchor = self
-                .anchor
-                .get_or_insert((chunk.frame_index, observed.max(0.0)));
-            let delta = chunk.frame_index.saturating_sub(anchor.0) as f64;
-            let prediction = anchor.1 + delta;
-            // Slowly correct independent hardware clocks; do not turn scheduling jitter into gaps.
-            let drift = observed - prediction;
-            if drift.abs() > 960.0 {
-                anchor.1 += drift.clamp(-4800.0, 4800.0) * 0.002;
-            }
-            let start = (anchor.1 + delta).max(0.0) as u64;
+            let start = timeline_frame(
+                &mut self.anchor,
+                chunk.frame_index,
+                chunk.frames as u64,
+                active_ms,
+            );
             for (offset, value) in chunk.data.iter().enumerate() {
                 let at = start + offset as u64;
                 if at < committed {
@@ -442,21 +447,42 @@ fn commit_audio(
     if count == 0 {
         return Ok(());
     }
+    let segment = commit_samples(
+        &spec.folder,
+        manifest,
+        &mic.take(count),
+        &sys.take(count),
+        spec.config.denoise,
+    )?;
+    emit(CaptureEvent::Segment { segment });
+    Ok(())
+}
+/// Publish a segment only after its three audio files have reached stable storage.
+fn commit_samples(
+    folder: &Path,
+    manifest: &mut CaptureManifest,
+    mic_data: &[f32],
+    sys_data: &[f32],
+    denoise: bool,
+) -> Result<MediaSegment> {
+    anyhow::ensure!(
+        !mic_data.is_empty() && mic_data.len() == sys_data.len(),
+        "Capture lanes have different segment lengths"
+    );
+    let count = mic_data.len();
     let index = manifest.segments.len();
     let microphone = format!("microphone-{index:06}.wav");
     let desktop = format!("desktop-{index:06}.wav");
     let mixed = format!("mixed-{index:06}.wav");
-    let mic_data = mic.take(count);
-    let sys_data = sys.take(count);
-    write_wav(&spec.folder.join(&microphone), &mic_data, 48_000)?;
-    write_wav(&spec.folder.join(&desktop), &sys_data, 48_000)?;
-    let mixed_data = mix_audio(&mic_data, &sys_data, spec.config.denoise);
+    write_wav(&folder.join(&microphone), mic_data, 48_000)?;
+    write_wav(&folder.join(&desktop), sys_data, 48_000)?;
+    let mixed_data = mix_audio(mic_data, sys_data, denoise);
     // Three-sample box filter before 48→16k decimation; ASR receives normalized mono PCM.
     let downsampled: Vec<f32> = mixed_data
         .chunks(3)
         .map(|c| c.iter().sum::<f32>() / c.len() as f32)
         .collect();
-    write_wav(&spec.folder.join(&mixed), &downsampled, 16_000)?;
+    write_wav(&folder.join(&mixed), &downsampled, 16_000)?;
     let start_ms = manifest.duration_ms;
     let end_ms = start_ms + count as u64 / 48;
     let segment = MediaSegment {
@@ -469,9 +495,8 @@ fn commit_audio(
     };
     manifest.segments.push(segment.clone());
     manifest.duration_ms = end_ms;
-    atomic_json(&spec.folder.join("capture.json"), manifest)?;
-    emit(CaptureEvent::Segment { segment });
-    Ok(())
+    atomic_json(&folder.join("capture.json"), manifest)?;
+    Ok(segment)
 }
 pub fn crop_frame(frame: RgbaImage, crop: Option<&Crop>) -> Result<RgbaImage> {
     if let Some(c) = crop {
@@ -965,6 +990,105 @@ mod tests {
         assert_eq!(picture.dimensions(), (360, 216));
         let [r, g, b] = picture[(100, 100)].0;
         assert!(r < g && g < b);
+    }
+    #[test]
+    fn interrupted_segment_process_recovers_durable_audio() {
+        // The same test binary acts as a child producer, so no hardware or private audio is used.
+        const FOLDER: &str = "MEETINGPAL_CRASH_FIXTURE_DIRECTORY";
+        if let Some(folder) = std::env::var_os(FOLDER) {
+            let folder = PathBuf::from(folder);
+            let mut manifest = CaptureManifest::default();
+            let samples = vec![0.125; SEGMENT_MS as usize * 48];
+            for _ in 0..3 {
+                let start = Instant::now();
+                commit_samples(&folder, &mut manifest, &samples, &samples, false).unwrap();
+                let elapsed = start.elapsed().as_micros().to_string();
+                fs::write(
+                    folder.join(format!("latency-{}", manifest.segments.len())),
+                    elapsed,
+                )
+                .unwrap();
+            }
+            // Announce after opening the next track, before the next manifest can be committed.
+            let mut unfinished = fs::File::create(folder.join("microphone-000003.wav")).unwrap();
+            std::io::Write::write_all(&mut unfinished, &[0; 1024]).unwrap();
+            fs::write(folder.join("incomplete"), b"ready").unwrap();
+            std::thread::sleep(Duration::from_secs(30));
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let store = crate::storage::Store::open(tmp.path().into()).unwrap();
+        let mut meeting = crate::domain::Meeting::new(Default::default());
+        meeting.status = "recording".into();
+        store.save(&meeting).unwrap();
+        let folder = store.folder(&meeting.id).unwrap();
+        drop(store);
+        let mut worker = hidden_command(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "capture::tests::interrupted_segment_process_recovers_durable_audio",
+            ])
+            .env(FOLDER, &folder)
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !folder.join("incomplete").exists()
+            && Instant::now() < deadline
+            && worker.try_wait().unwrap().is_none()
+        {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let ready = folder.join("incomplete").exists();
+        let _ = worker.kill();
+        worker.wait().unwrap();
+        assert!(ready, "fixture failed to reach incomplete segment");
+        let store = crate::storage::Store::open(tmp.path().into()).unwrap();
+        let recovered = store.load(&meeting.id).unwrap();
+        assert_eq!(recovered.status, "recovered");
+        assert_eq!(recovered.duration_ms, 3 * SEGMENT_MS);
+        assert_eq!(recovered.media.len(), 3);
+        for segment in &recovered.media {
+            for file in [&segment.microphone, &segment.desktop] {
+                assert_eq!(
+                    hound::WavReader::open(folder.join(file.as_ref().unwrap()))
+                        .unwrap()
+                        .duration(),
+                    SEGMENT_MS as u32 * 48
+                );
+            }
+            assert_eq!(
+                hound::WavReader::open(folder.join(&segment.mixed))
+                    .unwrap()
+                    .duration(),
+                SEGMENT_MS as u32 * 16
+            );
+        }
+        let latencies: Vec<_> = (1..=3)
+            .map(|i| fs::read_to_string(folder.join(format!("latency-{i}"))).unwrap())
+            .collect();
+        println!("15 s recovered after forced termination, partial segment excluded; commit times (microseconds): {}",latencies.join(", "));
+    }
+    #[test]
+    fn two_hours_of_simulated_clock_skew_stay_aligned() {
+        let mut max_error_ms = [0.0_f64; 2];
+        for (lane, ppm) in [-200.0, 200.0].into_iter().enumerate() {
+            let mut anchor = None;
+            let rate = 48000.0 * (1.0 + ppm / 1_000_000.0);
+            let chunks = (rate * 7200.0 / 480.0) as u64;
+            for n in 0..=chunks {
+                let index = n * 480;
+                let expected = index as f64 * 1000.0 / rate;
+                let arrival = ((index + 480) as f64 * 1000.0 / rate).round() as u64 + n % 4;
+                let at = timeline_frame(&mut anchor, index, 480, arrival) as f64 / 48.0;
+                max_error_ms[lane] = max_error_ms[lane].max((at - expected).abs());
+            }
+        }
+        let bound = max_error_ms.iter().sum::<f64>();
+        println!(
+            "Two simulated hours, ±200 ppm, 0–3 ms jitter: inter-track error bound {bound:.2} ms"
+        );
+        assert!(bound <= 100.0);
     }
     #[test]
     fn committed_wav_can_be_flushed_and_reopened() {

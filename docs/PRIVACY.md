@@ -11,7 +11,8 @@ Bei Cloud-Profilen werden die im Aufnahme-Dialog genannten Daten übertragen:
 - Transkription: abgeleiteter Audiomix an OpenAI.
 - Auswertung und Fragen: relevante Transkriptabschnitte, Notizen beziehungsweise Bildbeschreibungen an den gewählten Textanbieter.
 - Bilder: ausgewählte, bereits zugeschnittene Video-Frames an das Vision-Modell.
-- Native Gemini-Videoanalyse: lokale Videoclips mit Ton. Dieser Modus wird ausdrücklich ausgewählt.
+- Die ausdrücklich ausgewählte native Gemini-Videoanalyse überträgt Clips mit Ton über die Files API. MeetingPal wartet auf die Verarbeitung und fordert die Löschung jeder hochgeladenen Datei nach Erfolg und bei Verarbeitungsfehlern an. Nach einem Prozessabbruch oder einer fehlgeschlagenen Löschung gilt die Aufbewahrungsfrist des Anbieters. Das Anfragelimit berücksichtigt Upload, Statusabfragen, Auswertung und Löschung.
+- „Mit Testdaten beim Anbieter prüfen“ verwendet eine temporäre, getrennte Bibliothek. Übertragen werden ausschließlich das öffentliche Benchmark-Audio, ein vorgegebener Beispielsatz oder eine synthetische Folie bzw. ein Clip. Die Prüfung nutzt den Schlüssel des ausgewählten Anbieters und kann API-Kosten verursachen.
 
 Die Aufbewahrung auf Anbieter-Seite richtet sich nach dem jeweiligen Vertrag und API-Konto; die App kann diese nicht durch lokale Löschung rückgängig machen. API-Schlüssel gehören in Windows Credential Manager, macOS Keychain oder Linux Secret Service. Ist der sichere Speicher nicht verfügbar, zeigt die App den Sitzungsbetrieb an. Schlüssel werden nicht ins Bibliotheks-Backup aufgenommen.
 

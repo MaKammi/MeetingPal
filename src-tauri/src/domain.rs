@@ -80,6 +80,8 @@ pub struct MeetingConfig {
     pub analysis: ModelSelection,
     pub vision: ModelSelection,
     pub video_analysis: VideoAnalysis,
+    #[serde(default)]
+    pub stream_transcription: bool,
     pub max_requests: u32,
     pub consent: bool,
     pub denoise: bool,
@@ -112,6 +114,7 @@ impl Default for MeetingConfig {
                 model: "qwen-vision".into(),
             },
             video_analysis: VideoAnalysis::None,
+            stream_transcription: false,
             max_requests: 2000,
             consent: false,
             denoise: true,
